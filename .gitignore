@@ -1,1 +1,8 @@
 cscope.*
+autom4te.cache/
+Makefile.in
+
+libapparmor/aclocal.m4
+libapparmor/configure
+libapparmor/ltmain.sh
+libsmv/Makefile

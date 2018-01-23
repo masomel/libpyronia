@@ -30,6 +30,8 @@ int main(){
     int smv_id[NUM_SMVS_PER_THREAD];
     pthread_t tid[NUM_THREADS];
 
+    smv_main_init(1);
+
     int memdom_id = memdom_create();
     int privs = 0;
 
@@ -94,7 +96,7 @@ int main(){
     }
 
     // Try delete a non-existing smv/memdom
-    smv_kill(12345);
+    smv_kill(300);
     memdom_kill(48);
     return 0;
 }

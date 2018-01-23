@@ -15,7 +15,7 @@
 #define MEMDOM_ALLOCATE         0x00000008
 
 /* MMAP flag for memdom protected area */
-#define MAP_MEMDOM      0x00800000
+#define MAP_MEMDOM	0x00800000	
 
 /* Maximum heap size a memdom can use: 1GB */
 //#define MEMDOM_HEAP_SIZE 0x40000000
@@ -49,14 +49,14 @@ struct free_list_struct {
 struct block_header_struct {
     void *addr;
     int memdom_id;
-    unsigned long size;
+    unsigned long size;    
 };
 
 /* Memory domain metadata structure
  * A memory domain is an anonymously mmap-ed memory area.
- * mmap() is called when memdom_alloc is called the first time for a given memdom
+ * mmap() is called when memdom_alloc is called the first time for a given memdom 
  * Subsequent allocation does not invoke mmap(), instead, it allocates memory from the mmaped
- * area and update related metadata fields.
+ * area and update related metadata fields. 
  */
 struct memdom_metadata_struct {
     int memdom_id;
@@ -79,9 +79,9 @@ int memdom_create(void);
 int memdom_kill(int memdom_id);
 
 /* Allocate memory region in memory domain memdom */
-void *memdom_mmap(int memdom_id,
-                  unsigned long addr, unsigned long len,
-                  unsigned long prot, unsigned long flags,
+void *memdom_mmap(int memdom_id, 
+                  unsigned long addr, unsigned long len, 
+                  unsigned long prot, unsigned long flags, 
                   unsigned long fd, unsigned long pgoff);
 
 /* Allocate npages pages in memory domain memdom */

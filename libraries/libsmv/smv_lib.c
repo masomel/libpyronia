@@ -14,7 +14,7 @@
 pthread_mutex_t create_thread_mutex;
 int ALLOW_GLOBAL; // 1: all threads can access global memdom, 0 otherwise
 
-/* Telling the kernel that this process will be using the secure memory view model
+/* Telling the kernel that this process will be using the secure memory view model 
  * The master thread must call this routine to notify the kernel its status */
 int smv_main_init(int global) {
   int rv = -1;
@@ -62,7 +62,7 @@ int smv_kill(int smv_id) {
     fprintf(stderr, "smv_kill(%d) failed\n", smv_id);
     return -1;
   }
-  rlog("smv ID %d killed", smv_id);
+  rlog("smv ID %d killed\n", smv_id);
   return rv;
 }
 
@@ -76,7 +76,7 @@ int smv_join_domain(int memdom_id, int smv_id) {
     fprintf(stderr, "smv_join_domain(smv %d, memdom %d) failed\n", smv_id, memdom_id);
     return -1;
   }
-  rlog("smv ID %d joined memdom ID %d", smv_id, memdom_id);
+  rlog("smv ID %d joined memdom ID %d\n", smv_id, memdom_id);
   return 0;
 }
 
@@ -90,7 +90,7 @@ int smv_leave_domain(int memdom_id, int smv_id) {
     fprintf(stderr, "smv_leave_domain(smv %d, memdom %d) failed\n", smv_id, memdom_id);
     return -1;
   }
-  rlog("smv ID %d left memdom ID %d", smv_id, memdom_id);
+  rlog("smv ID %d left memdom ID %d\n", smv_id, memdom_id);
   return rv;
 }
 
@@ -104,7 +104,7 @@ int smv_is_in_domain(int memdom_id, int smv_id) {
     fprintf(stderr, "smv_is_in_domain(smv %d, memdom %d) failed\n", smv_id, memdom_id);
     return -1;
   }
-  rlog("smv ID %d in memdom ID %d?: %d", smv_id, memdom_id, rv);
+  rlog("smv ID %d in memdom ID %d?: %d\n", smv_id, memdom_id, rv);
   return rv;
 }
 
@@ -118,12 +118,12 @@ int smv_exists(int smv_id) {
     fprintf(stderr, "smv_exists(smv %d) failed\n", smv_id);
     return -1;
   }
-  rlog("smv ID %d exists? %d", smv_id, rv);
+  rlog("smv ID %d exists? %d\n", smv_id, rv);
   return rv;
 }
 
 /* Create an smv thread running in a smv.
- * When caller specify smv_id = -1, smvthread_create automatically creates a new smv
+ * When caller specify smv_id = -1, smvthread_create automatically creates a new smv 
  * for the about-to-run thread to running in.  Without non-zero smv, the function first check
  * if the smv_id exists in the system,  then proceed to create the thread to run in the given
  * smv id.
@@ -138,8 +138,8 @@ int smvthread_create(int smv_id, pthread_t* tid, void*(fn)(void*), void* args){
   void* stack_base;
   unsigned long stack_size;
 
-  /* When caller specify smv_id = -1, smvthread_create automatically creates a new smv
-   * for the about-to-run thread to running in.
+  /* When caller specify smv_id = -1, smvthread_create automatically creates a new smv 
+   * for the about-to-run thread to running in. 
    */
   if(smv_id == NEW_SMV){
     smv_id = smv_create();
@@ -178,8 +178,8 @@ int smvthread_create(int smv_id, pthread_t* tid, void*(fn)(void*), void* args){
   smv_join_domain(memdom_id, 0);
   memdom_priv_add(memdom_id, 0, MEMDOM_READ | MEMDOM_WRITE | MEMDOM_ALLOCATE | MEMDOM_EXECUTE);
 
-  /* Setup thread local stack
-   * Here we are using mmap for the newly created memdom, no contention is possible, so don't lock memdom lock
+  /* Setup thread local stack 
+   * Here we are using mmap for the newly created memdom, no contention is possible, so don't lock memdom lock 
    */
   stack_size = PTHREAD_STACK_MIN + 0x8000;
   stack_base = (void*)memdom_mmap(memdom_id, 0, stack_size, PROT_READ | PROT_WRITE,
@@ -235,3 +235,4 @@ int smvthread_create(int smv_id, pthread_t* tid, void*(fn)(void*), void* args){
   pthread_mutex_unlock(& create_thread_mutex);
   return smv_id;
 }
+    
