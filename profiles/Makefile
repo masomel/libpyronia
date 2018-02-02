@@ -26,8 +26,8 @@ COMMONDIR=../common/
 include $(COMMONDIR)/Make.rules
 
 DESTDIR=/
-PROFILES_DEST=${DESTDIR}/etc/apparmor.d
-EXTRAS_DEST=${DESTDIR}/usr/share/apparmor/extra-profiles/
+PROFILES_DEST=${DESTDIR}/etc/pyronia.d
+EXTRAS_DEST=${DESTDIR}/usr/share/pyronia/extra-profiles/
 PROFILES_SOURCE=./apparmor.d
 EXTRAS_SOURCE=./apparmor/profiles/extras/
 

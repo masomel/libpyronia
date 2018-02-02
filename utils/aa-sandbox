@@ -9,32 +9,32 @@
 #
 # ------------------------------------------------------------------
 
-import apparmor.sandbox
-from apparmor.common import error
+import pyronia.sandbox
+from pyronia.common import error
 import optparse
 import sys
 
 # setup exception handling
-from apparmor.fail import enable_aa_exception_handler
+from pyronia.fail import enable_aa_exception_handler
 enable_aa_exception_handler()
 
 if __name__ == "__main__":
     argv = sys.argv
     parser = optparse.OptionParser()
-    apparmor.easyprof.add_parser_policy_args(parser)
-    (opt, args) = apparmor.sandbox.parse_args(sys.argv, parser)
+    pyronia.easyprof.add_parser_policy_args(parser)
+    (opt, args) = pyronia.sandbox.parse_args(sys.argv, parser)
 
     if len(args) < 1:
         error("Must specify binary")
 
     binary = args[0]
-    if not apparmor.sandbox.check_requirements(binary):
+    if not pyronia.sandbox.check_requirements(binary):
         sys.exit(1)
 
     if opt.withx:
-        rc, report = apparmor.sandbox.run_xsandbox(args, opt)
+        rc, report = pyronia.sandbox.run_xsandbox(args, opt)
     else:
-        rc, report = apparmor.sandbox.run_sandbox(args, opt)
+        rc, report = pyronia.sandbox.run_sandbox(args, opt)
 
-    apparmor.common.msg(report)
+    pyronia.common.msg(report)
     sys.exit(rc)

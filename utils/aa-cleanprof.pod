@@ -13,7 +13,7 @@ B<aa-cleanprof I<E<lt>executableE<gt>> [I<E<lt>executableE<gt>> ...] [I<-d /path
 B<-d --dir  /path/to/profiles>
 
    Specifies where to look for the AppArmor security profile set.
-   Defaults to /etc/apparmor.d.
+   Defaults to /etc/pyronia.d.
 
 B<-s --silent>
 

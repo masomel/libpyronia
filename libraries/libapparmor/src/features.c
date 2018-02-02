@@ -32,7 +32,7 @@
 
 #include "private.h"
 
-#define FEATURES_FILE "/sys/kernel/security/apparmor/features"
+#define FEATURES_FILE "/sys/kernel/security/pyronia/features"
 
 #define STRING_SIZE 8192
 

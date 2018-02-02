@@ -17,7 +17,7 @@ B<file>
 B<-d --dir  /path/to/profiles>
 
    Specifies the target directory for the merged AppArmor security profile set.
-   Defaults to /etc/apparmor.d.
+   Defaults to /etc/pyronia.d.
 
 =head1 DESCRIPTION
 

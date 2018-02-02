@@ -19,16 +19,16 @@ import re
 import subprocess
 import sys
 
-import apparmor.aa as aa
-import apparmor.ui as ui
-import apparmor.common
+import pyronia.aa as aa
+import pyronia.ui as ui
+import pyronia.common
 
 # setup exception handling
-from apparmor.fail import enable_aa_exception_handler
+from pyronia.fail import enable_aa_exception_handler
 enable_aa_exception_handler()
 
 # setup module translations
-from apparmor.translations import init_translation
+from pyronia.translations import init_translation
 _ = init_translation()
 
 parser = argparse.ArgumentParser(description=_("Lists unconfined processes having tcp or udp ports"))
@@ -113,7 +113,7 @@ for pid in sorted(map(int, pids)):
         continue
     attr = None
     if os.path.exists("/proc/%s/attr/current" % pid):
-        with apparmor.common.open_file_read("/proc/%s/attr/current" % pid) as current:
+        with pyronia.common.open_file_read("/proc/%s/attr/current" % pid) as current:
             for line in current:
                 line = line.strip()
                 if line.endswith(' (complain)', 1) or line.endswith(' (enforce)', 1):  # enforce at least one char as profile name
@@ -121,7 +121,7 @@ for pid in sorted(map(int, pids)):
 
     pname = None
     cmdline = None
-    with apparmor.common.open_file_read("/proc/%s/cmdline" % pid) as cmd:
+    with pyronia.common.open_file_read("/proc/%s/cmdline" % pid) as cmd:
         cmdline = cmd.readlines()[0]
         pname = cmdline.split("\0")[0]
     if '/' in pname and pname != prog:

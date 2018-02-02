@@ -41,7 +41,13 @@ int memdom_kill(int memdom_id){
 
     /* Bound checking */
     if( memdom_id > MAX_MEMDOM ) {
-                fprintf(stderr, "memdom_kill(%d) failed\n", memdom_id);
+        fprintf(stderr, "memdom_kill(%d) failed\n", memdom_id);
+        return -1;
+    }
+
+    /* Checking for null memdom */
+    if (memdom[memdom_id] == NULL) {
+        fprintf(stderr, "memdom_kill(%d) failed\n", memdom_id);
         return -1;
     }
 
@@ -69,7 +75,7 @@ int memdom_kill(int memdom_id){
     sprintf(buf, "memdom,kill,%d", memdom_id);
     rv = message_to_kernel(buf);
     if( rv == -1 ){
-                fprintf(stderr, "memdom_kill(%d) failed\n", memdom_id);
+        fprintf(stderr, "memdom_kill(%d) failed\n", memdom_id);
         return -1;
     }
     rlog("Memdom ID %d killed\n", memdom_id);
@@ -91,7 +97,7 @@ void *memdom_mmap(int memdom_id,
     sprintf(buf, "memdom,mmapregister,%d", memdom_id);
     rv = message_to_kernel(buf);
     if( rv == -1 ){
-                fprintf(stderr, "memdom_mmap_register(%d) failed\n", memdom_id);
+        fprintf(stderr, "memdom_mmap_register(%d) failed\n", memdom_id);
         return NULL;
     }
     rlog("Memdom ID %d registered for mmap\n", memdom_id);
@@ -119,7 +125,7 @@ unsigned long memdom_priv_get(int memdom_id, int smv_id){
     sprintf(buf, "memdom,priv,%d,%d,get", memdom_id, smv_id);
     rv = message_to_kernel(buf);
     if( rv == -1 ){
-        rlog("kernel responded error");
+        rlog("kernel responded error\n");
         return -1;
     }
     rlog("smv %d in memdom %d has privilege: 0x%x\n", smv_id, memdom_id, rv);
@@ -134,7 +140,7 @@ int memdom_priv_add(int memdom_id, int smv_id, unsigned long privs){
     sprintf(buf, "memdom,priv,%d,%d,add,%lu", memdom_id, smv_id, privs);
     rv = message_to_kernel(buf);
     if( rv == -1 ){
-        rlog("kernel responded error");
+        rlog("kernel responded error\n");
         return -1;
     }
     rlog("smv %d in memdom %d has (after added)privilege: 0x%x\n", smv_id, memdom_id, rv);
@@ -149,13 +155,12 @@ int memdom_priv_del(int memdom_id, int smv_id, unsigned long privs){
     sprintf(buf, "memdom,priv,%d,%d,del,%lu", memdom_id, smv_id, privs);
     rv = message_to_kernel(buf);
     if( rv == -1 ){
-        rlog("kernel responded error");
+        rlog("kernel responded error\n");
         return -1;
     }
     rlog("smv %d in memdom %d has (after deleted)privilege: 0x%x\n", smv_id, memdom_id, rv);
     // ! should return privilege
     return rv;
-
 }
 
 /* Modify privilege of smv rib in memory domain memdom */
@@ -165,10 +170,11 @@ int memdom_priv_mod(int memdom_id, int smv_id, unsigned long privs){
     sprintf(buf, "memdom,priv,%d,%d,mod,%lu", memdom_id, smv_id, privs);
     rv = message_to_kernel(buf);
     if( rv == -1 ){
-        rlog("kernel responded error");
+        rlog("kernel responded error\n");
         return -1;
     }
     rlog("smv %d in memdom %d has (after modified)privilege: %d\n", smv_id, memdom_id, rv);
+
     // ! should return privilege
     return rv;
 }
@@ -181,7 +187,7 @@ int memdom_main_id(void){
     sprintf(buf, "memdom,mainid");
     rv = message_to_kernel(buf);
     if( rv == -1 ){
-        rlog("kernel responded error");
+        rlog("kernel responded error\n");
         return -1;
     }
     rlog("Global memdom id: %d\n", rv);
@@ -197,7 +203,7 @@ int memdom_query_id(void *obj){
     sprintf(buf, "memdom,queryid,%lu", addr);
     rv = message_to_kernel(buf);
     if( rv == -1 ){
-        rlog("kernel responded error");
+        rlog("kernel responded error\n");
         return -1;
     }
     rlog("obj in memdom %d\n", rv);
@@ -212,7 +218,7 @@ int memdom_private_id(void){
     sprintf(buf, "memdom,privateid");
     rv = message_to_kernel(buf);
     if( rv == -1 ){
-        rlog("kernel responded error");
+        rlog("kernel responded error\n");
         return -1;
     }
 #else
@@ -287,7 +293,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
 #ifdef INTERCEPT_MALLOC
 #undef malloc
 #endif
-        memblock = (char*) malloc(sz);
+        memblock = (char*) malloc(sz)
 #ifdef INTERCEPT_MALLOC
 #define malloc(sz) memdom_alloc(memdom_private_id(), sz)
 #endif
@@ -301,6 +307,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
     /* First time this memdom allocates memory */
     if( !memdom[memdom_id]->start ) {
         /* Call mmap to set up initial memory region */
+
         memblock = (char*) memdom_mmap(memdom_id, 0, MEMDOM_HEAP_SIZE,
                                        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_MEMDOM, 0, 0);
         if( memblock == MAP_FAILED ) {

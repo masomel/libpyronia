@@ -30,6 +30,8 @@ int main(){
     int smv_id[NUM_SMVS_PER_THREAD];
     pthread_t tid[NUM_THREADS];
 
+    smv_main_init(1);
+
     int memdom_id = memdom_create();
     int privs = 0;
 
@@ -41,10 +43,10 @@ int main(){
     for (i = 0; i < NUM_THREADS; i++) {
         pthread_create(&tid[i], NULL, fn, NULL);
     }
-   
+
     smv_join_domain(memdom_id, smv_id[0]);
     if (smv_is_in_domain(memdom_id, smv_id[0])) {
-        printf("smv %d joined memdom %d\n", smv_id[0], memdom_id);        
+        printf("smv %d joined memdom %d\n", smv_id[0], memdom_id);
     }
 
     /* Add privilege and delete them in serve order */
@@ -67,7 +69,7 @@ int main(){
     memdom_priv_del(memdom_id, smv_id[0], MEMDOM_EXECUTE);
     privs = memdom_priv_get(memdom_id, smv_id[0]);
     printf("smv %d privs %x memdom %d\n", smv_id[0], privs, memdom_id);
-    
+
     memdom_priv_del(memdom_id, smv_id[0], MEMDOM_WRITE);
     privs = memdom_priv_get(memdom_id, smv_id[0]);
     printf("smv %d privs %x memdom %d\n", smv_id[0], privs, memdom_id);

@@ -10,7 +10,7 @@
 #include "memdom_lib.h"
 #include "kernel_comm.h"
 
-#define LOGGING 0
+#define LOGGING 1
 #define __SOURCEFILE__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define rlog(format, ...) { \
     if( LOGGING ) { \

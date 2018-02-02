@@ -14,14 +14,14 @@
 # ----------------------------------------------------------------------
 import argparse
 
-import apparmor.tools
+import pyronia.tools
 
 # setup exception handling
-from apparmor.fail import enable_aa_exception_handler
+from pyronia.fail import enable_aa_exception_handler
 enable_aa_exception_handler()
 
 # setup module translations
-from apparmor.translations import init_translation
+from pyronia.translations import init_translation
 _ = init_translation()
 
 parser = argparse.ArgumentParser(description=_('Switch the given programs to audit mode'))
@@ -31,7 +31,7 @@ parser.add_argument('program', type=str, nargs='+', help=_('name of program'))
 parser.add_argument('--no-reload', dest='do_reload', action='store_false', default=True, help=_('Do not reload the profile after modifying it'))
 args = parser.parse_args()
 
-tool = apparmor.tools.aa_tools('audit', args)
+tool = pyronia.tools.aa_tools('audit', args)
 
 tool.cmd_audit()
 

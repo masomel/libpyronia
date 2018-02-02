@@ -21,11 +21,11 @@ COMMONDIR=../common/
 include $(COMMONDIR)/Make.rules
 
 DESTDIR=/
-APPARMOR_BIN_PREFIX=${DESTDIR}/lib/apparmor
-CONFDIR=/etc/apparmor
+APPARMOR_BIN_PREFIX=${DESTDIR}/lib/pyronia
+CONFDIR=/etc/pyronia
 INSTALL_CONFDIR=${DESTDIR}${CONFDIR}
 LOCALEDIR=/usr/share/locale
-MANPAGES=apparmor.d.5 apparmor.7 apparmor_parser.8 subdomain.conf.5
+MANPAGES=pyronia.d.5 pyronia.7 apparmor_parser.8 subdomain.conf.5
 
 YACC	:= /usr/bin/bison
 YFLAGS	:= -d
@@ -311,25 +311,27 @@ install-rhel4: install-redhat
 .PHONY: install-redhat
 install-redhat:
 	install -m 755 -d $(DESTDIR)/etc/init.d
-	install -m 755 rc.apparmor.$(subst install-,,$@) $(DESTDIR)/etc/init.d/apparmor
+	install -m 755 rc.pyronia.$(subst install-,,$@) $(DESTDIR)/etc/init.d/pyronia
 
 .PHONY: install-suse
 install-suse:
 	install -m 755 -d $(DESTDIR)/etc/init.d
-	install -m 755 rc.apparmor.$(subst install-,,$(@)) $(DESTDIR)/etc/init.d/boot.apparmor
+	install -m 755 rc.pyronia.$(subst install-,,$(@)) $(DESTDIR)/etc/init.d/boot.pyronia
 	install -m 755 -d $(DESTDIR)/sbin
-	ln -sf /etc/init.d/boot.apparmor $(DESTDIR)/sbin/rcapparmor
-	ln -sf rcapparmor $(DESTDIR)/sbin/rcsubdomain
+	ln -sf /etc/init.d/boot.pyronia $(DESTDIR)/sbin/rcpyronia
+	ln -sf rcpyronia $(DESTDIR)/sbin/rcsubdomain
 
 .PHONY: install-slackware
 install-slackware:
 	install -m 755 -d $(APPARMOR_BIN_PREFIX)/install
 	install -m 755 frob_slack_rc $(APPARMOR_BIN_PREFIX)/install
 	install -m 755 -d $(DESTDIR)/etc/rc.d
-	install -m 755 rc.apparmor.$(subst install-,,$(@)) $(DESTDIR)/etc/rc.d/rc.apparmor
+	install -m 755 rc.pyronia.$(subst install-,,$(@)) $(DESTDIR)/etc/rc.d/rc.pyronia
 
 .PHONY: install-debian
 install-debian:
+	install -m 755 -d $(DESTDIR)/etc/init.d
+	install -m 755 rc.pyronia.$(subst install-,,$(@)) $(DESTDIR)/etc/init.d/pyronia
 
 .PHONY: install-unknown
 install-unknown:
@@ -373,9 +375,9 @@ install-indep: indep
 	install -m 755 -d $(INSTALL_CONFDIR)
 	install -m 644 subdomain.conf $(INSTALL_CONFDIR)
 	install -m 644 parser.conf $(INSTALL_CONFDIR)
-	install -m 755 -d ${DESTDIR}/var/lib/apparmor
+	install -m 755 -d ${DESTDIR}/var/lib/pyronia
 	install -m 755 -d $(APPARMOR_BIN_PREFIX)
-	install -m 755 rc.apparmor.functions $(APPARMOR_BIN_PREFIX)
+	install -m 755 rc.pyronia.functions $(APPARMOR_BIN_PREFIX)
 	$(MAKE) -C po install NAME=${NAME} DESTDIR=${DESTDIR}
 	$(MAKE) install_manpages DESTDIR=${DESTDIR}
 

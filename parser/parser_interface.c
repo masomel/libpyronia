@@ -323,7 +323,7 @@ static inline void sd_write_listend(std::ostringstream &buf)
 void sd_serialize_dfa(std::ostringstream &buf, void *dfa, size_t size)
 {
 	if (dfa)
-		sd_write_aligned_blob(buf, dfa, size, "aadfa");
+		sd_write_aligned_blob(buf, dfa, size, "pyrdfa");
 }
 
 void sd_serialize_rlimits(std::ostringstream &buf, struct aa_rlimits *limits)

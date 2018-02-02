@@ -19,16 +19,16 @@ import re
 import subprocess
 import sys
 
-import apparmor.aa as apparmor
-import apparmor.ui as aaui
-from apparmor.common import warn
+import pyronia.aa as pyronia
+import pyronia.ui as aaui
+from pyronia.common import warn
 
 # setup exception handling
-from apparmor.fail import enable_aa_exception_handler
+from pyronia.fail import enable_aa_exception_handler
 enable_aa_exception_handler()
 
 # setup module translations
-from apparmor.translations import init_translation
+from pyronia.translations import init_translation
 _ = init_translation()
 
 def sysctl_read(path):
@@ -45,7 +45,7 @@ def sysctl_write(path, value):
         f_out.write(str(value))
 
 def last_audit_entry_time():
-    out = subprocess.check_output(['tail', '-1', apparmor.logfile])
+    out = subprocess.check_output(['tail', '-1', pyronia.logfile])
     logmark = None
     out = out.decode('ascii')
     if re.search('^.*msg\=audit\((\d+\.\d+\:\d+).*\).*$', out):
@@ -66,48 +66,48 @@ args = parser.parse_args()
 profiling = args.program
 profiledir = args.dir
 
-apparmor.set_logfile(args.file)
+pyronia.set_logfile(args.file)
 
-aa_mountpoint = apparmor.check_for_apparmor()
+aa_mountpoint = pyronia.check_for_apparmor()
 if not aa_mountpoint:
-    raise apparmor.AppArmorException(_('It seems AppArmor was not started. Please enable AppArmor and try again.'))
+    raise pyronia.AppArmorException(_('It seems AppArmor was not started. Please enable AppArmor and try again.'))
 
 if profiledir:
-    apparmor.profile_dir = apparmor.get_full_path(profiledir)
-    if not os.path.isdir(apparmor.profile_dir):
-        raise apparmor.AppArmorException(_("%s is not a directory.") %profiledir)
+    pyronia.profile_dir = pyronia.get_full_path(profiledir)
+    if not os.path.isdir(pyronia.profile_dir):
+        raise pyronia.AppArmorException(_("%s is not a directory.") %profiledir)
 
 program = None
-#if os.path.exists(apparmor.which(profiling.strip())):
+#if os.path.exists(pyronia.which(profiling.strip())):
 if os.path.exists(profiling):
-    program = apparmor.get_full_path(profiling)
+    program = pyronia.get_full_path(profiling)
 else:
     if '/' not in profiling:
-        which = apparmor.which(profiling)
+        which = pyronia.which(profiling)
         if which:
-            program = apparmor.get_full_path(which)
+            program = pyronia.get_full_path(which)
 
 if not program or not os.path.exists(program):
     if '/' not in profiling:
-        raise apparmor.AppArmorException(_("Can't find %(profiling)s in the system path list. If the name of the application\nis correct, please run 'which %(profiling)s' as a user with correct PATH\nenvironment set up in order to find the fully-qualified path and\nuse the full path as parameter.") % { 'profiling': profiling })
+        raise pyronia.AppArmorException(_("Can't find %(profiling)s in the system path list. If the name of the application\nis correct, please run 'which %(profiling)s' as a user with correct PATH\nenvironment set up in order to find the fully-qualified path and\nuse the full path as parameter.") % { 'profiling': profiling })
     else:
-        raise apparmor.AppArmorException(_('%s does not exists, please double-check the path.') %profiling)
+        raise pyronia.AppArmorException(_('%s does not exists, please double-check the path.') %profiling)
 
 # Check if the program has been marked as not allowed to have a profile
-apparmor.check_qualifiers(program)
+pyronia.check_qualifiers(program)
 
-apparmor.loadincludes()
+pyronia.loadincludes()
 
-profile_filename = apparmor.get_profile_filename(program)
+profile_filename = pyronia.get_profile_filename(program)
 if os.path.exists(profile_filename):
-    apparmor.helpers[program] = apparmor.get_profile_flags(profile_filename, program)
+    pyronia.helpers[program] = pyronia.get_profile_flags(profile_filename, program)
 else:
-    apparmor.autodep(program)
-    apparmor.helpers[program] = 'enforce'
+    pyronia.autodep(program)
+    pyronia.helpers[program] = 'enforce'
 
-if apparmor.helpers[program] == 'enforce':
-    apparmor.complain(program)
-    apparmor.reload(program)
+if pyronia.helpers[program] == 'enforce':
+    pyronia.complain(program)
+    pyronia.reload(program)
 
 # When reading from syslog, it is possible to hit the default kernel
 # printk ratelimit. This will result in audit entries getting skipped,
@@ -136,7 +136,7 @@ while not done_profiling:
         logmark = subprocess.check_output(['date | md5sum'], shell=True)
         logmark = logmark.decode('ascii').strip()
         logmark = re.search('^([0-9a-f]+)', logmark).groups()[0]
-        t=subprocess.call("%s -p kern.warn 'GenProf: %s'"%(apparmor.logger_path(), logmark), shell=True)
+        t=subprocess.call("%s -p kern.warn 'GenProf: %s'"%(pyronia.logger_path(), logmark), shell=True)
 
     else:
         logmark = last_audit_entry_time()
@@ -148,17 +148,17 @@ while not done_profiling:
     ans, arg = q.promptUser('noexit')
 
     if ans == 'CMD_SCAN':
-        lp_ret = apparmor.do_logprof_pass(logmark, passno)
+        lp_ret = pyronia.do_logprof_pass(logmark, passno)
         passno += 1
         if lp_ret == 'FINISHED':
             done_profiling = True
     else:
         done_profiling = True
 
-for p in sorted(apparmor.helpers.keys()):
-    if apparmor.helpers[p] == 'enforce':
-        apparmor.enforce(p)
-        apparmor.reload(p)
+for p in sorted(pyronia.helpers.keys()):
+    if pyronia.helpers[p] == 'enforce':
+        pyronia.enforce(p)
+        pyronia.reload(p)
 
 aaui.UI_Info(_('\nReloaded AppArmor profiles in enforce mode.'))
 aaui.UI_Info(_('\nPlease consider contributing your new profile!\nSee the following wiki page for more information:')+'\nhttp://wiki.apparmor.net/index.php/Profiles\n')

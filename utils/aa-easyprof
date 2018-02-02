@@ -9,13 +9,13 @@
 #
 # ------------------------------------------------------------------
 
-import apparmor.easyprof
-from apparmor.easyprof import error
+import pyronia.easyprof
+from pyronia.easyprof import error
 import os
 import sys
 
 # setup exception handling
-from apparmor.fail import enable_aa_exception_handler
+from pyronia.fail import enable_aa_exception_handler
 enable_aa_exception_handler()
 
 if __name__ == "__main__":
@@ -24,7 +24,7 @@ if __name__ == "__main__":
         return 'USAGE: %s [options] <path to binary>' % \
                os.path.basename(sys.argv[0])
 
-    (opt, args) = apparmor.easyprof.parse_args()
+    (opt, args) = pyronia.easyprof.parse_args()
     binary = None
     manifest = None
 
@@ -53,7 +53,7 @@ if __name__ == "__main__":
             error("Could not read '%s': %s (%d)\n" % (opt.manifest,
                                                       os.strerror(e.errno),
                                                       e.errno))
-        profiles = apparmor.easyprof.parse_manifest(manifest, opt)
+        profiles = pyronia.easyprof.parse_manifest(manifest, opt)
     else: # fake up a tuple list when processing command line args
         profiles.append( (binary, opt) )
 
@@ -61,10 +61,10 @@ if __name__ == "__main__":
     for (binary, options) in profiles:
         if len(profiles) > 1:
             count += 1
-        easyp = apparmor.easyprof.AppArmorEasyProfile(binary, options)
+        easyp = pyronia.easyprof.AppArmorEasyProfile(binary, options)
 
         if options.list_templates:
-            apparmor.easyprof.print_basefilenames(easyp.get_templates())
+            pyronia.easyprof.print_basefilenames(easyp.get_templates())
             sys.exit(0)
         elif options.template and options.show_template:
             sys_t = os.path.join(easyp.dirs['templates'], options.template)
@@ -74,14 +74,14 @@ if __name__ == "__main__":
                                      options.template)
 
             if os.path.exists(sys_t):
-                apparmor.easyprof.print_files([sys_t])
+                pyronia.easyprof.print_files([sys_t])
             elif os.path.exists(inc_t):
-                apparmor.easyprof.print_files([inc_t])
+                pyronia.easyprof.print_files([inc_t])
             else:
                 error("Could not find '%s'" % options.template)
             sys.exit(0)
         elif options.list_policy_groups:
-            apparmor.easyprof.print_basefilenames(easyp.get_policy_groups())
+            pyronia.easyprof.print_basefilenames(easyp.get_policy_groups())
             sys.exit(0)
         elif options.policy_groups and options.show_policy_group:
             files = []
@@ -98,15 +98,15 @@ if __name__ == "__main__":
                 else:
                     error("Could not find '%s'" % g)
 
-            apparmor.easyprof.print_files(files)
+            pyronia.easyprof.print_files(files)
             sys.exit(0)
         elif binary == None and not options.profile_name and \
              not options.manifest:
             error("Must specify binary and/or profile name\n%s" % m)
 
-        params = apparmor.easyprof.gen_policy_params(binary, options)
+        params = pyronia.easyprof.gen_policy_params(binary, options)
         if options.manifest and options.verify_manifest and \
-           not apparmor.easyprof.verify_manifest(params):
+           not pyronia.easyprof.verify_manifest(params):
             error("Manifest file requires review")
 
         if options.output_format == "json":

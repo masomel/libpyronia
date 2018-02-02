@@ -26,7 +26,7 @@ PYTOOLS = aa-easyprof aa-genprof aa-logprof aa-cleanprof aa-mergeprof \
 	  aa-status aa-unconfined
 TOOLS = ${PERLTOOLS} ${PYTOOLS} aa-decode
 PYSETUP = python-tools-setup.py
-PYMODULES = $(wildcard apparmor/*.py apparmor/rule/*.py)
+PYMODULES = $(wildcard pyronia/*.py pyronia/rule/*.py)
 
 MANPAGES = ${TOOLS:=.8} logprof.conf.5
 
@@ -40,7 +40,7 @@ docs: ${MANPAGES} ${HTMLMANPAGES}
 # need some better way of determining this
 DESTDIR=/
 BINDIR=${DESTDIR}/usr/sbin
-CONFDIR=${DESTDIR}/etc/apparmor
+CONFDIR=${DESTDIR}/etc/pyronia
 PYPREFIX=/usr
 
 PYFLAKES=pyflakes
@@ -72,8 +72,8 @@ clean: pod_clean
 	$(MAKE) -C vim clean
 	$(MAKE) -C test clean
 	rm -rf staging/ build/
-	rm -f apparmor/*.pyc apparmor/rule/*.pyc
-	rm -rf apparmor/__pycache__/ apparmor/rule/__pycache__/
+	rm -f pyronia/*.pyc pyronia/rule/*.pyc
+	rm -rf pyronia/__pycache__/ pyronia/rule/__pycache__/
 
 # ${CAPABILITIES} is defined in common/Make.rules
 .PHONY: check_severity_db

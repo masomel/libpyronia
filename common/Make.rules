@@ -28,7 +28,7 @@ common_Make.rules_is_a_bad_target:
 	@echo "*** default target in common/Make.rules hit - either you did something strange, or something is broken... ***"
 	exit 1
 
-DISTRIBUTION=AppArmor
+DISTRIBUTION=Pyronia
 VERSION=$(shell cat $(COMMONDIR)/Version)
 
 # Convenience functions

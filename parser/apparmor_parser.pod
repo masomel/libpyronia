@@ -181,12 +181,12 @@ defined as an absolute paths.
 =item -f n, --subdomainfs n
 
 Set the location of the apparmor security filesystem (default is
-"/sys/kernel/security/apparmor").
+"/sys/kernel/security/pyronia").
 
 =item -M n, --features-file n
 
 Use the features file located at path "n" (default is
-/etc/apparmor.d/cache/.features). If the --cache-loc option is present, the
+/etc/pyronia.d/cache/.features). If the --cache-loc option is present, the
 ".features" file in the specified cache directory is used.
 
 =item -m n, --match-string n
@@ -233,7 +233,7 @@ inconsistent state
 =item -L, --cache-loc
 
 Set the location of the cache directory.  If not specified the cache location
-defaults to /etc/apparmor.d/cache
+defaults to /etc/pyronia.d/cache
 
 =item -Q, --skip-kernel-load
 
@@ -338,7 +338,7 @@ profiles.
 
 =head1 CONFIG FILE
 
-An optional config file /etc/apparmor/parser.conf can be used to specify the
+An optional config file /etc/pyronia/parser.conf can be used to specify the
 default options for the parser, which then can be overridden using the command
 line options.
 

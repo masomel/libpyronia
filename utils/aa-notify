@@ -9,14 +9,14 @@
 #
 # ------------------------------------------------------------------
 #
-# /etc/apparmor/notify.conf:
+# /etc/pyronia/notify.conf:
 # # set to 'yes' to enable AppArmor DENIED notifications
 # show_notifications="yes"
 #
 # # only people in use_group can run this script
 # use_group="admin"
 #
-# $HOME/.apparmor/notify.conf can have:
+# $HOME/.pyronia/notify.conf can have:
 # # set to 'yes' to enable AppArmor DENIED notifications
 # show_notifications="yes"
 #
@@ -33,8 +33,8 @@ require File::Basename;
 use Getopt::Long;
 
 my %prefs;
-my $conf = "/etc/apparmor/notify.conf";
-my $user_conf = "$ENV{HOME}/.apparmor/notify.conf";
+my $conf = "/etc/pyronia/notify.conf";
+my $user_conf = "$ENV{HOME}/.pyronia/notify.conf";
 my $notify_exe = "/usr/bin/notify-send";
 my $notify_home = "";
 my $notify_display = "";

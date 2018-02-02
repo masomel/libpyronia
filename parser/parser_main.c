@@ -54,7 +54,7 @@
 #define PROC_MODULES "/proc/modules"
 #define MATCH_FILE "/sys/kernel/security/" MODULE_NAME "/matching"
 #define MOUNTED_FS "/proc/mounts"
-#define AADFA "pattern=aadfa"
+#define AADFA "pattern=pyrdfa"
 
 #define PRIVILEGED_OPS (kernel_load)
 #define UNPRIVILEGED_OPS (!(PRIVILEGED_OPS))

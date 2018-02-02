@@ -74,7 +74,7 @@ static char *stripblanks(char *s);
    with the -b option. */
 
 const char *basedir;
-static const char *default_basedir = "/etc/apparmor.d";
+static const char *default_basedir = "/etc/pyronia.d";
 static const char *old_basedir = "/etc/subdomain.d";
 
 

@@ -23,7 +23,7 @@ static int create_netlink_socket(int groups){
     socklen_t addr_len;
     int sd = socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC);
     if(sd < 0){
-        rlog("cannot create netlink socket");
+        rlog("cannot create netlink socket\n");
         return -1;
     }
 
@@ -34,7 +34,7 @@ static int create_netlink_socket(int groups){
 
     int rc = bind(sd, (struct sockaddr *) &local, sizeof(local));
     if(rc < 0){
-        rlog("cannot bind netlink socket");
+        rlog("cannot bind netlink socket\n");
         close(sd);
         return -1;
     }
@@ -79,24 +79,24 @@ int get_family_id(int netlink_socket){
 
     int rc = send_to_kernel(netlink_socket, (char *) &family_req, family_req.n.nlmsg_len);
     if ( rc < 0){
-        rlog("send_to_kernel failed...");
+        rlog("send_to_kernel failed...\n");
                 return -1;
     }
 
         rep_len = recv(netlink_socket, &ans, sizeof(ans), 0);
     if (rep_len < 0){
-                rlog("reply length < 0");
+                rlog("reply length < 0\n");
                 return -1;
         }
 
     /* Validate response message */
     if (!NLMSG_OK((&ans.n), rep_len)){
-                rlog("invalid reply message");
+                rlog("invalid reply message\n");
                 return -1;
         }
 
     if (ans.n.nlmsg_type == NLMSG_ERROR) { /* error */
-        rlog("received error");
+        rlog("received error\n");
         return -1;
     }
 
@@ -178,24 +178,23 @@ int message_to_kernel(char* message){
 
     /* Validate response message */
     if (ans.n.nlmsg_type == NLMSG_ERROR) { /* error */
-        rlog("error received NACK - leaving");
+        rlog("error received NACK - leaving\n");
         return -1;
     }
     if (rep_len < 0) {
-        rlog("error receiving reply message via Netlink");
+        rlog("error receiving reply message via Netlink\n");
         return -1;
     }
     if (!NLMSG_OK((&ans.n), rep_len)) {
-        rlog("invalid reply message received via Netlink");
+        rlog("invalid reply message received via Netlink\n");
                 return -1;
-        }
+    }
 
     rep_len = GENLMSG_PAYLOAD(&ans.n);
 
     /* Parse reply message */
     na = (struct nlattr *) GENLMSG_DATA(&ans);
     char * result = (char *)NLA_DATA(na);
-
     close(nl_sd);
     return(atoi(result));
 }

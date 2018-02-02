@@ -76,7 +76,7 @@ int aa_find_mountpoint(char **mnt)
 		if (strcmp(mntpt->mnt_type, "securityfs") != 0)
 			continue;
 
-		if (asprintf(&proposed, "%s/apparmor", mntpt->mnt_dir) < 0)
+		if (asprintf(&proposed, "%s/pyronia", mntpt->mnt_dir) < 0)
 			/* ENOMEM */
 			break;
 
@@ -117,7 +117,7 @@ int aa_is_enabled(void)
 	}
 
 	/* determine why the interface mountpoint isn't available */
-	fd = open("/sys/module/apparmor/parameters/enabled", O_RDONLY);
+	fd = open("/sys/module/pyronia/parameters/enabled", O_RDONLY);
 	if (fd == -1) {
 		if (errno == ENOENT)
 			errno = ENOSYS;

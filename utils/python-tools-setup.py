@@ -51,19 +51,19 @@ class Install(_install, object):
                 self.copy_file(os.path.basename(s), f)
 
         configs = ['easyprof/easyprof.conf']
-        self.mkpath(prefix + "/etc/apparmor")
+        self.mkpath(prefix + "/etc/pyronia")
         for c in configs:
-            self.copy_file(c, os.path.join(prefix + "/etc/apparmor", os.path.basename(c)))
+            self.copy_file(c, os.path.join(prefix + "/etc/pyronia", os.path.basename(c)))
 
         data = ['easyprof/templates', 'easyprof/policygroups']
-        self.mkpath(prefix + "/usr/share/apparmor/easyprof")
+        self.mkpath(prefix + "/usr/share/pyronia/easyprof")
         for d in data:
-            self.copy_tree(d, os.path.join(prefix + "/usr/share/apparmor/easyprof", os.path.basename(d)))
+            self.copy_tree(d, os.path.join(prefix + "/usr/share/pyronia/easyprof", os.path.basename(d)))
 
 
 if os.path.exists('staging'):
     shutil.rmtree('staging')
-shutil.copytree('apparmor', 'staging')
+shutil.copytree('pyronia', 'staging')
 
 # Support the --version=... since this will be part of a Makefile
 version = "unknown-version"
@@ -71,7 +71,7 @@ if "--version=" in sys.argv[-1]:
     version=sys.argv[-1].split('=')[1]
     sys.argv = sys.argv[0:-1]
 
-setup (name='apparmor',
+setup (name='pyronia',
        version=version,
        description='Python libraries for AppArmor utilities',
        long_description='Python libraries for AppArmor utilities',
@@ -80,9 +80,9 @@ setup (name='apparmor',
        url='https://launchpad.net/apparmor',
        license='GPL-2',
        cmdclass={'install': Install},
-       package_dir={'apparmor': 'staging'},
-       packages=['apparmor', 'apparmor.rule'],
-       py_modules=['apparmor.easyprof']
+       package_dir={'pyronia': 'staging'},
+       packages=['pyronia', 'pyronia.rule'],
+       py_modules=['pyronia.easyprof']
 )
 
 shutil.rmtree('staging')

@@ -8,7 +8,6 @@ TESTS = tc_smv_create tc_memdom_create \
 
 all: $(TESTS)
 
-
 tc_smv_create:
 	$(GCC) $(CFLAGS) $@.c -o $@.o $(LIBS)
 

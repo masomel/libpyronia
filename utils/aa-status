@@ -14,20 +14,20 @@ import re, os, sys, errno, json
 
 # PLEASE NOTE: we try to keep aa-status as minimal as possible, for
 # environments where installing all of the python utils and python
-# apparmor module may not make sense. Please think carefully before
-# importing anything from apparmor; see how the apparmor.fail import is
+# pyronia module may not make sense. Please think carefully before
+# importing anything from pyronia; see how the pyronia.fail import is
 # handled below.
 
 # setup exception handling
 try:
-    from apparmor.fail import enable_aa_exception_handler
+    from pyronia.fail import enable_aa_exception_handler
     enable_aa_exception_handler()
 except ImportError:
     # just let normal python exceptions happen (LP: #1480492)
     pass
 
 def cmd_enabled():
-    '''Returns error code if AppArmor is not enabled'''
+    '''Returns error code if pyronia is not enabled'''
     if get_profiles() == {}:
         sys.exit(2)
 
@@ -123,25 +123,25 @@ def get_profiles():
 
     profiles = {}
 
-    if os.path.exists("/sys/module/apparmor"):
-        stdmsg("apparmor module is loaded.")
+    if os.path.exists("/sys/module/pyronia"):
+        stdmsg("pyronia module is loaded.")
     else:
-        errormsg("apparmor module is not loaded.")
+        errormsg("pyronia module is not loaded.")
         sys.exit(1)
 
-    apparmorfs = find_apparmorfs()
-    if not apparmorfs:
-        errormsg("apparmor filesystem is not mounted.")
+    pyroniafs = find_pyroniafs()
+    if not pyroniafs:
+        errormsg("pyronia filesystem is not mounted.")
         sys.exit(3)
 
-    apparmor_profiles = os.path.join(apparmorfs, "profiles")
+    pyronia_profiles = os.path.join(pyroniafs, "profiles")
     try:
-        f = open(apparmor_profiles)
+        f = open(pyronia_profiles)
     except IOError as e:
         if e.errno == errno.EACCES:
             errormsg("You do not have enough privilege to read the profile set.")
         else:
-            errormsg("Could not open %s: %s" % (apparmor_profiles, os.strerror(e.errno)))
+            errormsg("Could not open %s: %s" % (pyronia_profiles, os.strerror(e.errno)))
         sys.exit(4)
 
     for p in f.readlines():
@@ -189,12 +189,12 @@ def filter_processes(processes, status):
             filtered.append([key, value['profile']])
     return filtered
 
-def find_apparmorfs():
-    '''Finds AppArmor mount point'''
+def find_pyroniafs():
+    '''Finds pyronia mount point'''
     for p in open("/proc/mounts","rb").readlines():
         if p.split()[2].decode() == "securityfs" and \
-           os.path.exists(os.path.join(p.split()[1].decode(), "apparmor")):
-            return os.path.join(p.split()[1].decode(), "apparmor")
+           os.path.exists(os.path.join(p.split()[1].decode(), "pyronia")):
+            return os.path.join(p.split()[1].decode(), "pyronia")
     return False
 
 def errormsg(message):
@@ -212,9 +212,9 @@ def stdmsg(message):
 def print_usage():
     '''Print usage information'''
     sys.stdout.write('''Usage: %s [OPTIONS]
-Displays various information about the currently loaded AppArmor policy.
+Displays various information about the currently loaded pyronia policy.
 OPTIONS (one only):
-  --enabled       returns error code if AppArmor not enabled
+  --enabled       returns error code if pyronia not enabled
   --profiled      prints the number of loaded policies
   --enforced      prints the number of loaded enforcing policies
   --complaining   prints the number of loaded non-enforcing policies

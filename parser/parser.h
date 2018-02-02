@@ -44,7 +44,7 @@ using namespace std;
 class Profile;
 class rule_t;
 
-#define MODULE_NAME "apparmor"
+#define MODULE_NAME "pyronia"
 
 /* Global variable to pass token to lexer.  Will be replaced by parameter
  * when lexer and parser are made reentrant
