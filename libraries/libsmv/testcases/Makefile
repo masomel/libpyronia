@@ -1,35 +1,16 @@
-GCC = gcc
-CFLAGS = -g -Wall -L/usr/local/
-LIBS = -lsmv -lpthread
+CC=gcc
+CFLAGS=-g -Wall -DPYR_TESTING=1
+MAKEFLAGS += --silent
+LIBS=-lsmv -lpthread
 
-TESTS = tc_smv_create tc_memdom_create \
-	 privs_t1 tc_smvthread_create \
-	 tc_shared_mm tc_memdom_alloc
+TESTS = memdom_ops_test
 
 all: $(TESTS)
 
-tc_smv_create:
-	$(GCC) $(CFLAGS) $@.c -o $@.o $(LIBS)
+memdom_ops_test: $(LIBS) memdom_ops_tests.c ; $(CC) $(CFLAGS) $^ -o $@
 
-tc_memdom_create:
-	$(GCC) $(CFLAGS) $@.c -o $@.o $(LIBS)
-
-privs_t1:
-	$(GCC) $(CFLAGS) $@.c -o $@.o $(LIBS)
-
-tc_smvthread_create:
-	$(GCC) $(CFLAGS) $@.c -o $@.o $(LIBS)
-
-tc_shared_mm:
-	$(GCC) $(CFLAGS) $@.c -o $@.o $(LIBS)
-
-tc_cond_var:
-	$(GCC) $(CFLAGS) $@.c -o $@.o $(LIBS)
-
-tc_memdom_alloc:
-	$(GCC) $(CFLAGS) $@.c -o $@.o $(LIBS)
+.PHONY: clean test
 
 test: ; for t in $(TESTS); do bash test.sh $$t ; done
 
-clean:
-	rm *.o
+clean: ; rm -rf *.o *~ *_test

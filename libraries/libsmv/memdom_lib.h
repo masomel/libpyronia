@@ -108,7 +108,7 @@ int memdom_main_id(void);
 /* Get the memdom id for a memory address */
 int memdom_query_id(void *obj);
 
-/* Get the calling thread's defualt memdom id */
+/* Get the calling thread's default memdom id */
 int memdom_private_id(void);
 
 #ifdef __cplusplus
