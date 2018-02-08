@@ -14,8 +14,6 @@ static int test_memdom_create() {
     printf("-- Test: main thread memdom create... ");
     int memdom_id = -1;
 
-    smv_main_init(1);
-
     // main thread create memdoms
     memdom_id = memdom_create();
 
@@ -23,9 +21,9 @@ static int test_memdom_create() {
         printf("memdom_create returned %d\n", memdom_id);
         return -1;
     }
-
+    
     if (memdom_kill(memdom_id)) {
-        printf("memdom_create returned %d\n", memdom_id);
+        printf("memdom_kill returned %d\n", memdom_id);
         return -1;
     }
 
@@ -34,25 +32,23 @@ static int test_memdom_create() {
 }
 
 static int test_memdom_create_fail() {
-    printf("-- Test: main thread memdom create... ");
+    printf("-- Test: main thread memdom create fail... ");
     int memdom_id = -1;
     int i = 0;
     int j = 0;
     int err = 0;
 
-    smv_main_init(1);
-
     // main thread create memdoms
     for (i = 0; i < MAX_MEMDOM; i++) {
         memdom_id = memdom_create();
-
+	
         if (memdom_id == -1) {
             printf("memdom_create returned %d\n", memdom_id);
             err = -1;
             goto out;
         }
     }
-
+    
     memdom_id = memdom_create();
     if (memdom_id != -1) {
         printf("Expected %d, got %d\n", -1, memdom_id);
@@ -61,8 +57,9 @@ static int test_memdom_create_fail() {
 
  out:
     for (j = 0; j < i; j++) {
-        if (memdom_kill(memdom_id)) {
-            printf("memdom_kill returned %d\n", memdom_id);
+      err = memdom_kill(j); 
+      if (err) {
+            printf("memdom_kill returned %d\n", err);
             err = -1;
         }
     }
@@ -76,6 +73,8 @@ int main(){
     int success = 0;
     int total_tests = 5;
 
+    smv_main_init(1);
+    
     // single memdom_create --> expect success
     if (!test_memdom_create()) {
         success++;

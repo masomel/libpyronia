@@ -1,13 +1,12 @@
 CC=gcc
 CFLAGS=-g -Wall -DPYR_TESTING=1
-MAKEFLAGS += --silent
 LIBS=-lsmv -lpthread
 
 TESTS = memdom_ops_test
 
 all: $(TESTS)
 
-memdom_ops_test: $(LIBS) memdom_ops_tests.c ; $(CC) $(CFLAGS) $^ -o $@
+memdom_ops_test: memdom_ops_tests.c ; $(CC) $(CFLAGS) $^ -o $@ $(LIBS)
 
 .PHONY: clean test
 

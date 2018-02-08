@@ -12,8 +12,8 @@ int memdom_create(){
     int memdom_id;
     memdom_id = message_to_kernel("memdom,create");
     if( memdom_id == -1 ){
-                fprintf(stderr, "memdom_create() failed\n");
-        return -1;
+      fprintf(stderr, "memdom_create() failed\n");
+      return -1;
     }
     /* Allocate metadata to hold memdom info */
 #ifdef INTERCEPT_MALLOC
@@ -38,10 +38,10 @@ int memdom_kill(int memdom_id){
     int rv = 0;
     char buf[50];
     struct free_list_struct *free_list;
-
+    
     /* Bound checking */
-    if( memdom_id > MAX_MEMDOM ) {
-        fprintf(stderr, "memdom_kill(%d) failed\n", memdom_id);
+    if( memdom_id < 0 || memdom_id > MAX_MEMDOM ) {
+      fprintf(stderr, "memdom_kill(%d) failed\n", memdom_id);
         return -1;
     }
 
@@ -293,7 +293,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
 #ifdef INTERCEPT_MALLOC
 #undef malloc
 #endif
-        memblock = (char*) malloc(sz)
+      memblock = (char*) malloc(sz);
 #ifdef INTERCEPT_MALLOC
 #define malloc(sz) memdom_alloc(memdom_private_id(), sz)
 #endif
