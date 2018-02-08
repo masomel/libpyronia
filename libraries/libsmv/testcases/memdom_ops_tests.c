@@ -10,6 +10,8 @@
 #include <smv_lib.h>
 #include <memdom_lib.h>
 
+#define MAIN_THREAD 0
+
 static int test_memdom_create() {
     printf("-- Test: main thread memdom create... ");
     int memdom_id = -1;
@@ -80,6 +82,10 @@ static int test_memdom_alloc() {
         return -1;
     }
 
+    // need to add this domain to the main thread
+    smv_join_domain(memdom_id, MAIN_THREAD);
+    memdom_priv_add(memdom_id, MAIN_THREAD, MEMDOM_ALLOCATE | MEMDOM_READ | MEMDOM_WRITE);
+    
     str = memdom_alloc(memdom_id, 6*sizeof(char));
     if (str == NULL) {
         err = -1;
@@ -120,6 +126,10 @@ static int test_memdom_queries() {
         return -1;
     }
 
+    // need to add this domain to the main thread
+    smv_join_domain(memdom_id, MAIN_THREAD);
+    memdom_priv_add(memdom_id, MAIN_THREAD, MEMDOM_ALLOCATE | MEMDOM_READ | MEMDOM_WRITE);
+    
     str = memdom_alloc(memdom_id, 6*sizeof(char));
     if (str == NULL) {
         err = -1;
@@ -161,8 +171,6 @@ int main(){
 
     int success = 0;
     int total_tests = 4;
-
-    smv_main_init(1);
     
     // single memdom_create --> expect success
     if (!test_memdom_create()) {
@@ -173,17 +181,17 @@ int main(){
     if (!test_memdom_create_fail()) {
         success++;
     }
-
-    // allocate a buffer in main thread's memory domain --> expect success
-    if (!test_memdom_alloc()) {
-        success++;
-    }
-
+    
     // query the memdom id for different parts of the system --> expect success
     if (!test_memdom_queries()) {
         success++;
     }
 
+    // allocate a buffer in main thread's memory domain --> expect success
+    if (!test_memdom_alloc()) {
+        success++;
+    }
+    
     printf("%d / %d memdom operations tests passed\n", success, total_tests);
 
     return 0;
