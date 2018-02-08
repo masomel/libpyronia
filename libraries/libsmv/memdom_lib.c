@@ -64,7 +64,7 @@ int memdom_kill(int memdom_id){
     while( free_list ) {
         struct free_list_struct *tmp = free_list;
         free_list = free_list->next;
-        printf("freeing free_list addr: %p, size: 0x%lx bytes\n", tmp->addr, tmp->size);
+        rlog("freeing free_list addr: %p, size: 0x%lx bytes\n", tmp->addr, tmp->size);
         free(tmp);
     }
 
@@ -114,7 +114,7 @@ void *memdom_mmap(int memdom_id,
 
     rlog("Memdom ID %d mmaped at %p\n", memdom_id, base);
 
-    printf("[%s] memdom %d mmaped 0x%lx bytes at %p\n", __func__, memdom_id, len, base);
+    rlog("[%s] memdom %d mmaped 0x%lx bytes at %p\n", __func__, memdom_id, len, base);
     return base;
 }
 
@@ -231,7 +231,7 @@ int memdom_private_id(void){
 void dumpFreeListHead(int memdom_id){
     struct free_list_struct *walk = memdom[memdom_id]->free_list_head;
     while ( walk ) {
-        printf("[%s] memdom %d free_list addr: %p, sz: 0x%lx\n",
+        rlog("[%s] memdom %d free_list addr: %p, sz: 0x%lx\n",
                 __func__, memdom_id, walk->addr, walk->size);
         walk = walk->next;
     }
@@ -247,7 +247,7 @@ void free_list_insert_to_head(int memdom_id, struct free_list_struct *new_free_l
         new_free_list->next = head;
     }
     memdom[memdom_id]->free_list_head = new_free_list;
-    printf("[%s] memdom %d inserted free list addr: %p, size: 0x%lx\n", __func__, memdom_id, new_free_list->addr, new_free_list->size);
+    rlog("[%s] memdom %d inserted free list addr: %p, size: 0x%lx\n", __func__, memdom_id, new_free_list->addr, new_free_list->size);
 }
 
 /* Initialize free list */
@@ -267,7 +267,7 @@ void free_list_init(int memdom_id){
     new_free_list->next = NULL;
     memdom[memdom_id]->free_list_head = NULL;   // reclaimed chunk are inserted to head
     memdom[memdom_id]->free_list_tail = new_free_list;
-    printf("[%s] memdom %d: free_list addr: %p, size: 0x%lx bytes\n", __func__, memdom_id, new_free_list->addr, new_free_list->size);
+    rlog("[%s] memdom %d: free_list addr: %p, size: 0x%lx bytes\n", __func__, memdom_id, new_free_list->addr, new_free_list->size);
 }
 
 /* Round up the number to the nearest multiple */
@@ -302,7 +302,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
 
     pthread_mutex_lock(&memdom[memdom_id]->mlock);
 
-    printf("[%s] memdom %d allocating sz 0x%lx bytes\n", __func__, memdom_id, sz);
+    rlog("[%s] memdom %d allocating sz 0x%lx bytes\n", __func__, memdom_id, sz);
 
     /* First time this memdom allocates memory */
     if( !memdom[memdom_id]->start ) {
@@ -327,7 +327,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
      * --------------------------------------
      */
     sz = round_up ( sz + sizeof(struct block_header_struct), CHUNK_SIZE);
-    printf("[%s] request rounded to 0x%lx bytes\n", __func__, sz);
+    rlog("[%s] request rounded to 0x%lx bytes\n", __func__, sz);
 
     /* Get memory from the tail of free list, if the last free list is not available for allocation,
      * start searching the free list from the head until first fit is found.
@@ -337,7 +337,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
     /* Allocate from tail:
      * check if the last element in free list is available,
      * allocate memory from it */
-    printf("[%s] memdom %d search from tail for 0x%lx bytes\n", __func__, memdom_id, sz);
+    rlog("[%s] memdom %d search from tail for 0x%lx bytes\n", __func__, memdom_id, sz);
     if ( free_list && sz <= free_list->size ) {
         memblock = (char*)free_list->addr;
 
@@ -345,13 +345,13 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
         free_list->addr = (char*)free_list->addr + sz;
         free_list->size = free_list->size - sz;
 
-        printf("[%s] memdom %d last free list available, free_list addr: %p, remaining sz: 0x%lx bytes\n",
+        rlog("[%s] memdom %d last free list available, free_list addr: %p, remaining sz: 0x%lx bytes\n",
                 __func__, memdom_id, free_list->addr, free_list->size);
         /* Last chunk is now allocated, tail is not available from now */
         if( free_list->size == 0 ) {
             free(free_list);
             memdom[memdom_id]->free_list_tail = NULL;
-            printf("[%s] free_list size is 0, freed this free_list_struct, the next allocate should request from free_list_head\n", __func__);
+            rlog("[%s] free_list size is 0, freed this free_list_struct, the next allocate should request from free_list_head\n", __func__);
         }
         goto out;
     }
@@ -359,16 +359,16 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
     /* Allocate from head:
      * ok the last free list is not available,
      * let's start searching from the head for the first fit */
-    printf("[%s] memdom %d search from head for 0x%lx bytes\n", __func__, memdom_id, sz);
+    rlog("[%s] memdom %d search from head for 0x%lx bytes\n", __func__, memdom_id, sz);
     dumpFreeListHead(memdom_id);
     free_list = memdom[memdom_id]->free_list_head;
     struct free_list_struct *prev = NULL;
     while (free_list) {
         if( prev ) {
-            printf("[%s] memdom %d prev->addr %p, prev->size 0x%lx bytes\n", __func__, memdom_id, prev->addr, prev->size);
+            rlog("[%s] memdom %d prev->addr %p, prev->size 0x%lx bytes\n", __func__, memdom_id, prev->addr, prev->size);
         }
         if( free_list ) {
-            printf("[%s] memdom %d free_list->addr %p, free_list->size 0x%lx bytes\n", __func__, memdom_id, free_list->addr, free_list->size);
+            rlog("[%s] memdom %d free_list->addr %p, free_list->size 0x%lx bytes\n", __func__, memdom_id, free_list->addr, free_list->size);
         }
 
         /* Found free list! */
@@ -385,7 +385,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
                 ptr = ptr + sz;
                 free_list->addr = (void*)ptr;
                 free_list->size = free_list->size - sz;
-                printf("[%s] Adjust free list to addr %p, sz 0x%lx\n",
+                rlog("[%s] Adjust free list to addr %p, sz 0x%lx\n",
                         __func__, free_list->addr, free_list->size);
             }
             /* Remove this free list struct:
@@ -394,15 +394,15 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
             else{
                 if ( free_list == memdom[memdom_id]->free_list_head ) {
                     memdom[memdom_id]->free_list_head = memdom[memdom_id]->free_list_head->next;
-                    printf("[%s] memdom %d set free_list_head to free_list_head->next\n", __func__, memdom_id);
+                    rlog("[%s] memdom %d set free_list_head to free_list_head->next\n", __func__, memdom_id);
                 }
                 else {
                     prev->next = free_list->next;
-                    printf("[%s] memdom %d set prev->next to free_list->next\n", __func__, memdom_id);
+                    rlog("[%s] memdom %d set prev->next to free_list->next\n", __func__, memdom_id);
                 }
                 free(free_list);
 
-                printf("[%s] memdom %d removed free list\n", __func__, memdom_id);
+                rlog("[%s] memdom %d removed free list\n", __func__, memdom_id);
             }
             goto out;
         }
@@ -424,7 +424,7 @@ out:
         header.size = sz;
         memcpy(memblock, &header, sizeof(struct block_header_struct));
         memblock = memblock + sizeof(struct block_header_struct);
-        printf("[%s] header: addr %p, allocated 0x%lx bytes and returning data addr %p\n", __func__, header.addr, sz, memblock);
+        rlog("[%s] header: addr %p, allocated 0x%lx bytes and returning data addr %p\n", __func__, header.addr, sz, memblock);
     }
 
     pthread_mutex_unlock(&memdom[memdom_id]->mlock);
@@ -445,7 +445,7 @@ void memdom_free(void* data){
     pthread_mutex_lock(&memdom[memdom_id]->mlock);
 
     /* Free the memory */
-    printf("[%s] block header addr: %p, freeing 0x%lx bytes in memdom %d\n", __func__, header.addr, header.size, header.memdom_id);
+    rlog("[%s] block header addr: %p, freeing 0x%lx bytes in memdom %d\n", __func__, header.addr, header.size, header.memdom_id);
     memset(memblock, 0, header.size);
 
     /* Create a new free list node */
