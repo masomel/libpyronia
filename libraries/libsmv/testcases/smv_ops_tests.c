@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <pthread.h>
 #include <smv_lib.h>
 #include <memdom_lib.h>
 
@@ -41,7 +40,7 @@ static int test_smv_create_fail() {
     int err = 0;
 
     // main thread create memdoms
-    for (i = 0; i < 1025; i++) {
+    for (i = 0; i < 1024; i++) {
         smv_id = smv_create();
 
         if (smv_id == -1) {
@@ -58,7 +57,7 @@ static int test_smv_create_fail() {
     }
 
  out:
-    for (j = 1; j < i; j++) {
+    for (j = 1; j < 1025; j++) {
       if (smv_kill(j)) {
         printf("smv_kill failed for %d\n", j);
         err = -1;
