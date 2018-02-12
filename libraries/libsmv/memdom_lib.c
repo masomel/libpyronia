@@ -143,7 +143,7 @@ int memdom_priv_add(int memdom_id, int smv_id, unsigned long privs){
         rlog("kernel responded error\n");
         return -1;
     }
-    rlog("smv %d in memdom %d has new privilege after add\n", smv_id, memdom_id));
+    rlog("smv %d in memdom %d has new privilege after add\n", smv_id, memdom_id);
     return rv;
 }
 
