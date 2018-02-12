@@ -1,0 +1,65 @@
+/* Tests the SMV system. Adapted from the original
+ * SMV userland testcases.
+ *
+ *@author Marcela S. Melara
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <smv_lib.h>
+#include <pthread.h>
+#include <memdom_lib.h>
+
+#define MAIN_THREAD 0
+
+void * fn(void *args) {
+    printf("Hello from smv thread!\n");
+}
+
+static int test_smvthread_create() {
+    printf("-- Test: main thread smvthread create... ");
+    int smv_id = -1;
+    int ret = 0;
+    int err = 0;
+    pthread_t *tid;
+
+    // main thread create smv
+    smv_id = smv_create();
+    if (smv_id == -1) {
+        printf("smv_create returned %d\n", smv_id);
+        return -1;
+    }
+
+    ret = smvthread_create(smv_id, &tid, fn, NULL);
+    if (ret == -1) {
+        printf("smv_create returned %d\n", smv_id);
+        err = -1;
+    }
+
+    if (smv_kill(smv_id)) {
+        printf("smv_kill failed for %d\n", smv_id);
+        err = -1;
+    }
+
+    if (!err)
+        printf("success\n");
+    return err;
+}
+
+int main(){
+
+    smv_main_init(0);
+
+    int success = 0;
+    int total_tests = 1;
+
+    // single smvthread_create --> expect success
+    if (!test_smvthread_create()) {
+        success++;
+    }
+
+    printf("%d / %d smv thread operations tests passed\n", success, total_tests);
+
+    return 0;
+}
