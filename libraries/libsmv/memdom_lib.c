@@ -143,8 +143,7 @@ int memdom_priv_add(int memdom_id, int smv_id, unsigned long privs){
         rlog("kernel responded error\n");
         return -1;
     }
-    rlog("smv %d in memdom %d has (after added)privilege: 0x%x\n", smv_id, memdom_id, rv);
-    // ! should return privilege
+    rlog("smv %d in memdom %d has new privilege after add\n", smv_id, memdom_id));
     return rv;
 }
 
@@ -158,27 +157,9 @@ int memdom_priv_del(int memdom_id, int smv_id, unsigned long privs){
         rlog("kernel responded error\n");
         return -1;
     }
-    rlog("smv %d in memdom %d has (after deleted)privilege: 0x%x\n", smv_id, memdom_id, rv);
-    // ! should return privilege
+    rlog("smv %d in memdom %d has new privilege after delete\n", smv_id, memdom_id);
     return rv;
 }
-
-/* Modify privilege of smv rib in memory domain memdom */
-int memdom_priv_mod(int memdom_id, int smv_id, unsigned long privs){
-    int rv = 0;
-    char buf[100];
-    sprintf(buf, "memdom,priv,%d,%d,mod,%lu", memdom_id, smv_id, privs);
-    rv = message_to_kernel(buf);
-    if( rv == -1 ){
-        rlog("kernel responded error\n");
-        return -1;
-    }
-    rlog("smv %d in memdom %d has (after modified)privilege: %d\n", smv_id, memdom_id, rv);
-
-    // ! should return privilege
-    return rv;
-}
-
 
 /* Get the memdom id for global memory used by main thread */
 int memdom_main_id(void){

@@ -10,6 +10,7 @@
 #include <smv_lib.h>
 #include <memdom_lib.h>
 #include <signal.h>
+#include <setjmp.h>
 
 #define MAIN_THREAD 0
 
@@ -34,12 +35,15 @@ static void prep_handler()
 
 }
 
+static void memdom_write_trigger(const char c, char *buf) {
+  buf[0] = c;
+}
+
 static int test_memdom_read_fault() {
     printf("-- Test: main thread memdom read fault... ");
     int memdom_id = -1;
-    int str_memdom_id = -1;
     char *str;
-    int err = 0;
+    int err = -1;
 
     memdom_id = memdom_main_id();
     if (memdom_id != 0) {
@@ -55,35 +59,40 @@ static int test_memdom_read_fault() {
 
     // need to add this domain to the main thread
     smv_join_domain(memdom_id, MAIN_THREAD);
-    memdom_priv_add(memdom_id, MAIN_THREAD, MEMDOM_ALLOC | MEMDOM_READ | MEMDOM_WRITE);
+    memdom_priv_add(memdom_id, MAIN_THREAD, MEMDOM_WRITE);
 
-    printf("current memdom privs: %d\n", memdom_priv_get(memdom_id, MAIN_THREAD));
+    printf("current memdom privs: %lu\n", memdom_priv_get(memdom_id, MAIN_THREAD));
 
     str = memdom_alloc(memdom_id, 6*sizeof(char));
     if (str == NULL) {
-        err = -1;
-        str_memdom_id = memdom_id;
         goto out;
     }
 
     sprintf(str, "hello");
-    printf("allocated: %s\n", str);
+    memdom_priv_del(memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+    str[0] = 'b';
+    printf("after write: %s\n", str);
 
-    memdom_priv_del(memdom_id, MAIN_THREAD, MEMDOM_READ);
+    memdom_priv_add(memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+
+    
+    /*
+    memdom_priv_del(memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+    printf("current memdom privs: %lu\n", memdom_priv_get(memdom_id, MAIN_THREAD));
 
     prep_handler();
     if (setjmp(point) == 0)
-        printf("allocated: %s\n", str);
+      sprintf(str, "evil!");
     else {
         printf("caught segfault\n");
         err = 0;
-    }
+	}*/
 
     memdom_free(str);
 
  out:
-    if (memdom_kill(str_memdom_id)) {
-        printf("memdom_kill returned %d\n", str_memdom_id);
+    if (memdom_kill(memdom_id)) {
+        printf("memdom_kill returned %d\n", memdom_id);
         err = -1;
     }
     if (!err)

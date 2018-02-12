@@ -99,9 +99,6 @@ int memdom_priv_add(int memdom_id, int smv_id, unsigned long privs);
 /* Delete privilege of smv rib in memory domain memdom */
 int memdom_priv_del(int memdom_id, int smv_id, unsigned long privs);
 
-/* Modify privilege of smv rib in memory domain memdom */
-int memdom_priv_mod(int memdom_id, int smv_id, unsigned long privs);
-
 /* Get the memdom id for global memory used by main thread */
 int memdom_main_id(void);
 
