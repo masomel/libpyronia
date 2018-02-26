@@ -25,7 +25,7 @@ static int test_smvthread_create() {
     int err = 0;
     pthread_t tid;
     int func_id = -1;
-    
+
     // main thread create smv
     smv_id = smv_create();
     if (smv_id == -1) {
@@ -46,7 +46,7 @@ static int test_smvthread_create() {
     if (ret) {
       printf("join returned an error: %s\n", strerror(errno));
     }
-    
+
  out:
     if (smv_kill(smv_id)) {
       printf("smv_kill failed for %d\n", smv_id);
@@ -66,7 +66,7 @@ static int test_smvthread_own_memdom() {
     int err = 0;
     pthread_t tid;
     int func_id = -1;
-    
+
     // main thread create smv
     smv_id = smv_create();
     if (smv_id == -1) {
@@ -86,7 +86,7 @@ static int test_smvthread_own_memdom() {
 
     smv_join_domain(dom_id, smv_id);
     memdom_priv_add(dom_id, smv_id, MEMDOM_READ | MEMDOM_WRITE);
-    
+
     ret = smvthread_create(smv_id, &tid, fn, NULL);
     if (ret == -1) {
         printf("smvthread_create returned %d\n", ret);

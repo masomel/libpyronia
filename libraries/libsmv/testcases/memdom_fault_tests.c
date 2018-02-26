@@ -11,6 +11,7 @@
 #include <memdom_lib.h>
 #include <signal.h>
 #include <setjmp.h>
+#include <pthread.h>
 
 #define MAIN_THREAD 0
 
@@ -35,6 +36,11 @@ static void prep_handler()
 
 }
 
+static void *memdom_read_trigger(void *buf) {
+    printf("reading buffer: %s\n", (char *)buf);
+    return NULL;
+}
+
 static void memdom_write_trigger(const char c, char *buf) {
   buf[0] = c;
 }
@@ -42,14 +48,10 @@ static void memdom_write_trigger(const char c, char *buf) {
 static int test_memdom_read_fault() {
     printf("-- Test: main thread memdom read fault... ");
     int memdom_id = -1;
-    char *str;
+    int smv_id = -1;
     int err = -1;
-
-    memdom_id = memdom_main_id();
-    if (memdom_id != 0) {
-        printf("Expected %d, got %d\n", 0, memdom_id);
-        return -1;
-    }
+    pthread_t tid;
+    char *str;
 
     memdom_id = memdom_create();
     if (memdom_id == -1) {
@@ -57,25 +59,29 @@ static int test_memdom_read_fault() {
         return -1;
     }
 
-    // need to add this domain to the main thread
-    smv_join_domain(memdom_id, MAIN_THREAD);
-    memdom_priv_add(memdom_id, MAIN_THREAD, MEMDOM_WRITE);
-
-    printf("current memdom privs: %lu\n", memdom_priv_get(memdom_id, MAIN_THREAD));
-
-    str = memdom_alloc(memdom_id, 6*sizeof(char));
-    if (str == NULL) {
+    smv_id = smv_create();
+    if (smv_id == -1) {
+        printf("memdom_create returned %d\n", memdom_id);
+        err = -1;
         goto out;
     }
 
+    // add this memory domain to the main thread SMV
+    smv_join_domain(memdom_id, MAIN_THREAD);
+    memdom_priv_add(memdom_id, MAIN_THREAD, MEMDOM_WRITE | MEMDOM_READ);
+
+    str = memdom_alloc(memdom_id, 6*sizeof(char));
     sprintf(str, "hello");
-    memdom_priv_del(memdom_id, MAIN_THREAD, MEMDOM_WRITE);
-    str[0] = 'b';
-    printf("after write: %s\n", str);
 
-    memdom_priv_add(memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+    // child thread without privs tries to read the buffer in this domain
+    smv_join_domain(memdom_id, smv_id);
+    err = smvthread_create(smv_id, &tid, memdom_read_trigger, str);
+    if (err == -1) {
+        printf("smvthread_create returned %d\n", err);
+    }
 
-    
+    pthread_join(tid, NULL);
+
     /*
     memdom_priv_del(memdom_id, MAIN_THREAD, MEMDOM_WRITE);
     printf("current memdom privs: %lu\n", memdom_priv_get(memdom_id, MAIN_THREAD));
