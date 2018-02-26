@@ -51,6 +51,7 @@ int main(){
     }
 
     /* Add privilege and delete them in serve order */
+    smv_join_domain(memdom_id, smv_id[0]);
     memdom_priv_add(memdom_id, smv_id[0], MEMDOM_READ);
     privs = memdom_priv_get(memdom_id, smv_id[0]);
     printf("smv %d privs %x memdom %d\n", smv_id[0], privs, memdom_id);

@@ -45,6 +45,7 @@ static int test_smvthread_create() {
     ret = pthread_join(tid, NULL);
     if (ret) {
       printf("join returned an error: %s\n", strerror(errno));
+      err = -1;
     }
     
  out:
