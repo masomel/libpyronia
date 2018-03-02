@@ -14,17 +14,22 @@
 #define MAIN_THREAD 0
 
 static void *memdom_read_trigger(void *buf) {
-    printf("reading buffer: %s\n", (char *)buf);
-    return NULL;
+  printf("reading buffer: %s\n", (char *)buf);
+  return NULL;
+}
+
+static void *memdom_write_trigger(void *buf) {
+  printf("reading buffer now: %s\n", (char *)buf);
+  return NULL;
 }
 
 int main(){
   
-    printf("-- Test: thread memdom read fault... ");
+    printf("-- Test: thread memdom write fault... ");
     int memdom_id = -1;
     int smv_id = -1;
-    int err = -1;
-    pthread_t tid;
+    int err = 0;
+    pthread_t tid1, tid2;
     char *str;
 
     smv_main_init(1);
@@ -49,18 +54,32 @@ int main(){
     str = memdom_alloc(memdom_id, 6*sizeof(char));
     sprintf(str, "hello");
 
-    // child thread without privs tries to read the buffer in this domain
     smv_join_domain(memdom_id, smv_id);
-    memdom_priv_add(memdom_id, smv_id, 0);
-    // trigger memdom read segfault
-    err = smvthread_create(smv_id, &tid, memdom_read_trigger, str);
+    memdom_priv_add(memdom_id, smv_id, MEMDOM_READ);
+    
+    // first read domain
+    err = smvthread_create(smv_id, &tid1, memdom_read_trigger, str);
     if (err == -1) {
       printf("smvthread_create returned %d\n", err);
     }
-    pthread_join(tid, NULL);
+    pthread_join(tid1, NULL);
+    
+    memdom_priv_del(memdom_id, smv_id, MEMDOM_READ);
+    
+    printf("smv %d privs %x memdom %d\n", smv_id, memdom_priv_get(memdom_id, smv_id), memdom_id);	
+    
+    // trigger memdom write segfault
+    err = smvthread_create(smv_id, &tid2, memdom_write_trigger, str);
+    if (err == -1) {
+      printf("smvthread_create returned %d\n", err);
+    }
+    pthread_join(tid2, NULL);
 
+    printf("after write attempt: %s\n", str);
+    memdom_free(str);
+    
  out:
-    if (err != 0) {
+    if (err == -1) {
       printf("failed\n");
     }
 
