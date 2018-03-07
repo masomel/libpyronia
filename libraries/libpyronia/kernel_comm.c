@@ -52,15 +52,41 @@ static int message_to_kernel(char* message) {
  * callstack back to the kernel.
  */
 static int handle_callstack_request(struct nl_msg *msg, void *arg) {
-    // FIXME: Don't just echo back the kernel's message
+    struct nlmsghdr *nl_hdr;
+    struct genlmsghdr *genl_hdr;
+    struct nlattr *attrs[SI_COMM_A_MAX];
+    uint8_t *reqp;
+    int err;
 
-    int *reqp;
+    rlog("The kernel module sent a message.\n");
 
-    reqp = nlmsg_data(nlmsg_hdr(msg));
-    printf("Kernel sent request: %d\n", *reqp);
+    nl_hdr = nlmsg_hdr(msg);
+    genl_hdr = genlmsg_hdr(nl_hdr);
 
+    if (genl_hdr->cmd != SI_COMM_C_STACK_REQ) {
+        rlog("Unsupported command %d\n", genl_hdr->cmd);
+        return 0;
+    }
+
+    err = genlmsg_parse(nl_hdr, 0, attrs, SI_COMM_A_MAX, si_comm_genl_policy[1]);
+    if (err)
+        return nl_fail(err, "genlmsg_parse");
+
+    // ignore any attributes other than the KERN_REQ
+    if (attrs[SI_COMM_A_KERN_REQ]) {
+        reqp = (uint8_t *)nla_data(attrs[SI_COMM_A_KERN_REQ));
+        if (*reqp != STACK_REQ_CMD) {
+            rlog("Unexpected kernel message: %u\n", *reqp);
+            return -1;
+        }
+    }
+    else {
+        rlog("Null message from the kernel message\n");
+        return -1;
+    }
+
+    // FIXME: Go collect the callstack and serialize it
     return message_to_kernel("ACK");
-
 }
 
 int init_si_kernel_comm() {
@@ -71,6 +97,7 @@ int init_si_kernel_comm() {
         rlog("Could not allocate SI netlink socket\n");
         return -1;
     }
+    nl_socket_disable_seq_check(sock);
 
     port_num = nl_socket_get_local_port(sock);
 
@@ -78,7 +105,7 @@ int init_si_kernel_comm() {
 
     // TODO: register the port number with the kernel
 
-    err = nl_socket_modify_cb(sock, NL_CB_FINISH, NL_CB_CUSTOM,
+    err = nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM,
                                 handle_callstack_request, NULL);
     if (err < 0) {
         rlog("Could not register receive callback function. Error = %d\n", err);
