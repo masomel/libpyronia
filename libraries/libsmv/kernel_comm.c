@@ -1,16 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <errno.h>
 #include <unistd.h>
 #include <poll.h>
 #include <string.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/socket.h>
-#include <sys/types.h>
-#include <signal.h>
-#include <linux/sched.h>
 #include <linux/genetlink.h>
 #include "kernel_comm.h"
 #include "smv_lib.h"
@@ -18,6 +13,8 @@
 #define GENLMSG_DATA(glh) ((void *)(NLMSG_DATA(glh) + GENL_HDRLEN))
 #define GENLMSG_PAYLOAD(glh) (NLMSG_PAYLOAD(glh, 0) - GENL_HDRLEN)
 #define NLA_DATA(na) ((void *)((char*)(na) + NLA_HDRLEN))
+
+uint32_t port_id;
 
 static int create_netlink_socket(int groups){
     socklen_t addr_len;
@@ -42,13 +39,35 @@ static int create_netlink_socket(int groups){
     return sd;
 }
 
-int get_family_id(int netlink_socket){
+static int send_req(int netlink_socket, int type, int cmd,
+                    int attr_type, char *msg) {
     struct {
         struct nlmsghdr n;
         struct genlmsghdr g;
         char buf[256];
-    } family_req;
+    } req;
+    struct nlattr *na;
 
+    req.n.nlmsg_type = type;
+    req.n.nlmsg_flags = NLM_F_REQUEST;
+    req.n.nlmsg_seq = 0;
+    req.n.nlmsg_pid = port_id;
+    req.n.nlmsg_len = NLMSG_LENGTH(GENL_HDRLEN);
+    req.g.cmd = cmd;
+    req.g.version = 0;
+
+    na = (struct nlattr *) GENLMSG_DATA(&req);
+    na->nla_type = attr_type;
+    na->nla_len = strlen(msg) + 1 + NLA_HDRLEN;
+
+    memcpy(NLA_DATA(na), msg, na->nla_len);
+
+    req.n.nlmsg_len += NLMSG_ALIGN(na->nla_len);
+
+    return send_to_kernel(netlink_socket, (char *) &req, req.n.nlmsg_len);
+}
+
+int get_family_id(int netlink_socket, char *family_str){
     struct {
         struct nlmsghdr n;
         struct genlmsghdr g;
@@ -56,34 +75,15 @@ int get_family_id(int netlink_socket){
     } ans;
 
     int id;
-    struct nlattr *na;
     int rep_len;
 
-    /* Get family name */
-    family_req.n.nlmsg_type = GENL_ID_CTRL;
-    family_req.n.nlmsg_flags = NLM_F_REQUEST;
-    family_req.n.nlmsg_seq = 0;
-    family_req.n.nlmsg_pid = getpid();
-    family_req.n.nlmsg_len = NLMSG_LENGTH(GENL_HDRLEN);
-    family_req.g.cmd = CTRL_CMD_GETFAMILY;
-    family_req.g.version = 0x1;
-
-    na = (struct nlattr *) GENLMSG_DATA(&family_req);
-    na->nla_type = CTRL_ATTR_FAMILY_NAME;
-    /*------change here--------*/
-    na->nla_len = strlen("CONTROL_EXMPL") + 1 + NLA_HDRLEN;
-
-    strcpy(NLA_DATA(na), "CONTROL_EXMPL");
-
-    family_req.n.nlmsg_len += NLMSG_ALIGN(na->nla_len);
-
-    int rc = send_to_kernel(netlink_socket, (char *) &family_req, family_req.n.nlmsg_len);
+    int rc = send_req(netlink_socket, GENL_ID_CTRL, CTRL_CMD_GETFAMILY, CTRL_ATTR_FAMILY_NAME, family_str);
     if ( rc < 0){
         rlog("send_to_kernel failed...\n");
                 return -1;
     }
 
-        rep_len = recv(netlink_socket, &ans, sizeof(ans), 0);
+    rep_len = recv(netlink_socket, &ans, sizeof(ans), 0);
     if (rep_len < 0){
                 rlog("reply length < 0\n");
                 return -1;
@@ -100,6 +100,7 @@ int get_family_id(int netlink_socket){
         return -1;
     }
 
+    struct nlattr *na;
     na = (struct nlattr *) GENLMSG_DATA(&ans);
     na = (struct nlattr *) ((char *) na + NLA_ALIGN(na->nla_len));
     if (na->nla_type == CTRL_ATTR_FAMILY_ID) {
@@ -108,6 +109,7 @@ int get_family_id(int netlink_socket){
     return id;
 }
 
+// FIXME: make this function static
 int send_to_kernel(int netlink_socket, const char *message, int length){
     struct sockaddr_nl nladdr;
     int r;
@@ -126,6 +128,7 @@ int send_to_kernel(int netlink_socket, const char *message, int length){
     return 0;
 }
 
+// FIXME: change the name of this function and add params
 int message_to_kernel(char* message){
 
     int nl_sd = create_netlink_socket(0);
@@ -133,48 +136,18 @@ int message_to_kernel(char* message){
         printf("create netlink socket failure\n");
         return 0;
     }
-    int id = get_family_id(nl_sd);
-        struct {
+    // FIXME: make family string customizable
+    int id = get_family_id(nl_sd, "CONTROL_EXMPL");
+    struct {
         struct nlmsghdr n;
         struct genlmsghdr g;
         char buf[256];
     } ans;
 
-    struct {
-        struct nlmsghdr n;
-        struct genlmsghdr g;
-        char buf[256];
-    } req;
-    struct nlattr *na;
-
-    /* Send command needed */
-    req.n.nlmsg_len = NLMSG_LENGTH(GENL_HDRLEN);
-    req.n.nlmsg_type = id;
-    req.n.nlmsg_flags = NLM_F_REQUEST;
-    req.n.nlmsg_seq = 60;
-    req.n.nlmsg_pid = getpid();
-    req.g.cmd = 1;//DOC_EXMPL_C_ECHO;
-
-    /* Compose message */
-    na = (struct nlattr *) GENLMSG_DATA(&req);
-    na->nla_type = 1; //DOC_EXMPL_A_MSG
-    int mlength = strlen(message) + 2;  // +2: \0
-    na->nla_len = mlength+NLA_HDRLEN; //message length
-    memcpy(NLA_DATA(na), message, mlength);
-    req.n.nlmsg_len += NLMSG_ALIGN(na->nla_len);
-
-    /* Send message */
-        struct sockaddr_nl nladdr;
-    int r;
-
-    memset(&nladdr, 0, sizeof(nladdr));
-    nladdr.nl_family = AF_NETLINK;
-
-        r = sendto(nl_sd, (char *)&req, req.n.nlmsg_len, 0,
-               (struct sockaddr *) &nladdr, sizeof(nladdr));
-
+    // FIXME: make cmd and attr customizable
+    int r = send_req(nl_sd, id, 1, 1, message);
     /* Recv message */
-        int rep_len = recv(nl_sd, &ans, sizeof(ans), 0);
+    int rep_len = recv(nl_sd, &ans, sizeof(ans), 0);
 
     /* Validate response message */
     if (ans.n.nlmsg_type == NLMSG_ERROR) { /* error */
@@ -193,6 +166,7 @@ int message_to_kernel(char* message){
     rep_len = GENLMSG_PAYLOAD(&ans.n);
 
     /* Parse reply message */
+    struct nlattr *na;
     na = (struct nlattr *) GENLMSG_DATA(&ans);
     char * result = (char *)NLA_DATA(na);
     close(nl_sd);

@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 int message_to_kernel(char* message);
-int get_family_id(int netlink_socket);
+    int get_family_id(int netlink_socket, char *family_str);
 int send_to_kernel(int netlink_socket, const char *message, int length);
 int compose_message(char* message);
 

@@ -1,33 +1,42 @@
-#include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <unistd.h>
-#include <poll.h>
+#include <stdint.h>
 #include <string.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <signal.h>
 #include <linux/sched.h>
 #include <linux/genetlink.h>
-#include "kernel_comm.h"
-#include <netlink/netlink.h>
-#include <netlink/msg.h>
-#include <netlink/socket.h>
-#include <netlink/genl/genl.h>
 
 #include "kernel_comm.h"
-#include "callstack.h"
+#include <sys/pyronia.h>
 
-struct nl_sock *sock;
 uint32_t port_num;
 int family_id;
 
 #define GENLMSG_DATA(glh) ((void *)(NLMSG_DATA(glh) + GENL_HDRLEN))
 #define GENLMSG_PAYLOAD(glh) (NLMSG_PAYLOAD(glh, 0) - GENL_HDRLEN)
 #define NLA_DATA(na) ((void *)((char*)(na) + NLA_HDRLEN))
+
+static int send_message(uint8_t cmd, char *message) {
+    struct nl_msg *msg;
+    struct my_hdr *usr_hdr;
+    int err = 0;
+
+    if (!(msg = nlmsg_alloc())) {
+        rlog("Error sending message to kernel: %d\n", err);
+        return -1;
+    }
+
+    usr_hdr = genlmsg_put(msg, port_num, NL_AUTO_SEQ, family_id, sizeof(struct my_hdr), 0, cmd, 0);
+
+    if (!usr_hdr) {
+        rlog("Error sending message to kernel: %d\n", err);
+        return -1;
+    }
+
+    err = nl_send(
+}
 
 static int message_to_kernel(char* message) {
     int err = 0;
@@ -103,7 +112,7 @@ int init_si_kernel_comm() {
 
     family_id = genl_ctrl_resolve(sock, "SI_COMM");
 
-    // TODO: register the port number with the kernel
+
 
     err = nl_socket_modify_cb(sock, NL_CB_VALID, NL_CB_CUSTOM,
                                 handle_callstack_request, NULL);
