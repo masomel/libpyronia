@@ -11,14 +11,38 @@
 #include <limits.h>
 #include "smv_lib.h"
 
+#define FAMILY_STR "CONTROL_EXMPL"
+#define NL_CMD 1
+#define NL_ATTR 1
+
 pthread_mutex_t create_thread_mutex;
 int ALLOW_GLOBAL; // 1: all threads can access global memdom, 0 otherwise
+
+static int nl_sock;
+static int nl_fam;
+static uint32_t port_id;
+
+/* libsmv-specific wrapper around send_message in kernel_comm.h */
+int message_to_kernel(char *message) {
+    return send_message(nl_sock, nl_fam, NL_CMD, NL_ATTR, port_id, message);
+}
 
 /* Telling the kernel that this process will be using the secure memory view model
  * The master thread must call this routine to notify the kernel its status */
 int smv_main_init(int global) {
   int rv = -1;
   ALLOW_GLOBAL = 0;
+
+  /* Open the netlink socket */
+  nl_sock = create_netlink_socket(0);
+  if(nl_sock < 0){
+      printf("create netlink socket failure\n");
+      return 0;
+  }
+
+  port_id = getpid();
+
+  nl_fam = get_family_id(nl_sock, port_id, FAMILY_STR);
 
   /* Set mm->using_smv to true in kernel space */
   rv = message_to_kernel("smv,maininit");

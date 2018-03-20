@@ -7,6 +7,9 @@
 
 struct memdom_metadata_struct *memdom[MAX_MEMDOM];
 
+// defined in smv_lib.c
+int message_to_kernel(char *message);
+
 /* Create memory domain and return it to user */
 int memdom_create(){
     int memdom_id;
