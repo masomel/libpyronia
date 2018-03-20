@@ -10,6 +10,7 @@ Makefile
 *.2
 *.3
 *.5
+*.*~
 
 libraries/libapparmor/aclocal.m4
 libraries/libapparmor/configure
