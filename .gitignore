@@ -51,11 +51,9 @@ libraries/libapparmor/testsuite/home.pyronia.kernel_permissions_checker_test_py
 libraries/libapparmor/testsuite/kernel_permissions_checker.c
 libraries/libapparmor/testsuite/kernel_permissions_checker_test.py
 libraries/libapparmor/testsuite/test_multi.multi
-libraries/libsmv/CMakeCache.txt
-libraries/libsmv/CMakeFiles/
-libraries/libsmv/cmake_install.cmake
-libraries/libsmv/install_api.sh
-libraries/libsmv/testcases/memdom_ops_test
+libraries/*/CMakeCache.txt
+libraries/*/CMakeFiles/
+libraries/*/cmake_install.cmake
 parser/af_names.h
 parser/apparmor_parser
 parser/cap_names.h

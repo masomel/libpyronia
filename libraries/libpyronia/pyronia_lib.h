@@ -6,7 +6,8 @@ extern "C" {
 #endif
 
 int pyr_init(void);
-
+void pyr_exit(void);
+  
 #ifdef __cplusplus
 }
 #endif
