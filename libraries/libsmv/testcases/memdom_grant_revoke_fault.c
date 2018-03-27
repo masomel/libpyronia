@@ -62,7 +62,7 @@ int main(){
     // revoke read access to the domain
     memdom_priv_del(memdom_id, smv_id, MEMDOM_READ);
     
-    printf("smv %d privs %x memdom %d\n", smv_id, memdom_priv_get(memdom_id, smv_id), memdom_id);	
+    printf("smv %d privs %lu memdom %d\n", smv_id, memdom_priv_get(memdom_id, smv_id), memdom_id);	
     
     // trigger memdom read segfault
     err = smvthread_create(smv_id, &tid2, memdom_read_trigger, str);

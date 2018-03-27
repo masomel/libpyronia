@@ -18,8 +18,8 @@ static void *memdom_read_trigger(void *buf) {
   return NULL;
 }
 
-static void *memdom_write_trigger(void *buf) {
-  printf("reading buffer now: %s\n", (char *)buf);
+static void *memdom_write_trigger(char *buf) {
+  buf[0] = 'b';
   return NULL;
 }
 
@@ -62,11 +62,7 @@ int main(){
     if (err == -1) {
       printf("smvthread_create returned %d\n", err);
     }
-    pthread_join(tid1, NULL);
-    
-    memdom_priv_del(memdom_id, smv_id, MEMDOM_READ);
-    
-    printf("smv %d privs %x memdom %d\n", smv_id, memdom_priv_get(memdom_id, smv_id), memdom_id);	
+    pthread_join(tid1, NULL);	
     
     // trigger memdom write segfault
     err = smvthread_create(smv_id, &tid2, memdom_write_trigger, str);
