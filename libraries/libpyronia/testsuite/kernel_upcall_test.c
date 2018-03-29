@@ -10,10 +10,11 @@ int main (int argc, char *argv[]) {
 
   if (ret) {
     // Throw an error
+    printf("Got error %d\n", ret);
     goto out;
   }
 
  out:
-  pyr_exit();
+  //pyr_exit();
   return ret;
 }

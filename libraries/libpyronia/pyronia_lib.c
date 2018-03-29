@@ -12,11 +12,14 @@
 #include <linux/pyronia_netlink.h>
 #include <linux/pyronia_mac.h>
 
+#include "pyronia_lib.h"
+
 #define FAMILY_STR "SI_COMM"
 
-static nl_sock *si_sock;
+static struct nl_sock *si_sock;
 static int nl_sock;
 static int nl_fam;
+static uint32_t si_port;
 static uint32_t nl_port;
 static struct pyr_runtime *runtime;
 
@@ -38,30 +41,30 @@ static int handle_callstack_request(struct nl_msg *msg, void *arg) {
     pyr_cg_node_t *callstack;
     int err;
 
-    rlog("The kernel module sent a message.\n");
+    printf("The kernel module sent a message.\n");
 
     nl_hdr = nlmsg_hdr(msg);
     genl_hdr = genlmsg_hdr(nl_hdr);
 
     if (genl_hdr->cmd != SI_COMM_C_STACK_REQ) {
-        rlog("Unsupported command %d\n", genl_hdr->cmd);
+        printf("Unsupported command %d\n", genl_hdr->cmd);
         return 0;
     }
 
-    err = genlmsg_parse(nl_hdr, 0, attrs, SI_COMM_A_MAX, si_comm_genl_policy[1]);
+    err = genlmsg_parse(nl_hdr, 0, attrs, SI_COMM_A_MAX, si_comm_genl_policy);
     if (err)
-        return nl_fail(err, "genlmsg_parse");
+      return err;
 
     // ignore any attributes other than the KERN_REQ
     if (attrs[SI_COMM_A_KERN_REQ]) {
-        reqp = (uint8_t *)nla_data(attrs[SI_COMM_A_KERN_REQ));
+        reqp = (uint8_t *)nla_data(attrs[SI_COMM_A_KERN_REQ]);
         if (*reqp != STACK_REQ_CMD) {
-            rlog("Unexpected kernel message: %u\n", *reqp);
+            printf("Unexpected kernel message: %u\n", *reqp);
             return -1;
         }
     }
     else {
-        rlog("Null message from the kernel message\n");
+        printf("Null message from the kernel message\n");
         return -1;
     }
 
@@ -77,30 +80,31 @@ static int init_si_kernel_comm() {
 
     si_sock = nl_socket_alloc();
     if (!si_sock) {
-        rlog("Could not allocate SI netlink socket\n");
+        printf("Could not allocate SI netlink socket\n");
         return -1;
     }
     nl_socket_disable_seq_check(si_sock);
+    nl_socket_disable_auto_ack(si_sock);
 
-    nl_port = nl_socket_get_local_port(si_sock);
+    si_port = nl_socket_get_local_port(si_sock);
 
     err = nl_socket_modify_cb(si_sock, NL_CB_VALID, NL_CB_CUSTOM,
                                 handle_callstack_request, NULL);
     if (err < 0) {
-        rlog("Could not register receive callback function. Error = %d\n", err);
+        printf("Could not register receive callback function. Error = %d\n", err);
         goto error;
     }
 
     err = genl_connect(si_sock);
     if (err) {
-        rlog("SI netlink socket connection failed: %d\n", err);
+        printf("SI netlink socket connection failed: %d\n", err);
         goto error;
     }
 
     return 0;
 
  error:
-    rlog("Following libnl error occurred: %s\n", nl_geterror(err));
+    printf("Following libnl error occurred: %s\n", nl_geterror(err));
     nl_socket_free(si_sock);
     return err;
 }
@@ -126,10 +130,11 @@ int pyr_init() {
         printf("SI socket initialization failure\n");
     }
 
+    nl_port = getpid();
     nl_fam = get_family_id(nl_sock, nl_port, FAMILY_STR);
 
-    printf("[%s] Initialized socket at port %d (== pid? %d); SI_COMM family id = %d\n",
-           __func__, nl_port, (nl_port == getpid()), nl_fam);
+    printf("[%s] Initialized socket at port %d; SI_COMM family id = %d\n",
+           __func__, nl_port, nl_fam);
 
     sprintf(str, "%d", nl_port);
     err = pyr_to_kernel(SI_COMM_C_REGISTER_PROC, SI_COMM_A_USR_MSG, str);

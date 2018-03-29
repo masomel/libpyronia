@@ -3,19 +3,19 @@
 
 #include <linux/pyronia_mac.h>
 
+struct pyr_runtime {
+  /* The function used to collect a language runtime-specific
+   * callstack. This callback needs to be set at initialization time. */
+  pyr_cg_node_t *(*collect_callstack_cb)(void);
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct pyr_runtime {
-    /* The function used to collect a language runtime-specific
-     * callstack. This callback needs to be set at initialization time. */
-    pyr_cg_node_t *(*collect_callstack_cb)(void);
-};
-
 int pyr_init(void);
 void pyr_exit(void);
-int pyr_init_runtime(pyr_cg_node_t *(*collect_callstack_cb)(void));
+int pyr_init_runtime(pyr_cg_node_t *(*collect_callstack)(void));
 
 #ifdef __cplusplus
 }
