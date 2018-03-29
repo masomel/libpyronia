@@ -24,7 +24,18 @@ static uint32_t port_id;
 
 /* libsmv-specific wrapper around send_message in kernel_comm.h */
 int message_to_kernel(char *message) {
-    return send_message(nl_sock, nl_fam, NL_CMD, NL_ATTR, port_id, message);
+  int err = -1;;
+  nl_sock = create_netlink_socket(0);
+  if(nl_sock < 0){
+    printf("create netlink socket failure\n");
+    goto out;
+  }
+  
+  err = send_message(nl_sock, nl_fam, NL_CMD, NL_ATTR, port_id, message);
+
+ out:
+  teardown_netlink_socket(nl_sock);
+  return err;
 }
 
 /* Telling the kernel that this process will be using the secure memory view model
@@ -43,7 +54,8 @@ int smv_main_init(int global) {
   port_id = getpid();
 
   nl_fam = get_family_id(nl_sock, port_id, FAMILY_STR);
-
+  teardown_netlink_socket(nl_sock);
+  
   /* Set mm->using_smv to true in kernel space */
   rv = message_to_kernel("smv,maininit");
   if (rv != 0) {
