@@ -9,6 +9,7 @@
 #include <netlink/msg.h>
 #include <netlink/socket.h>
 #include <netlink/genl/genl.h>
+#include <netlink/genl/ctrl.h>
 #include <linux/pyronia_netlink.h>
 #include <linux/pyronia_mac.h>
 
@@ -17,25 +18,24 @@
 #define FAMILY_STR "SI_COMM"
 
 static struct nl_sock *si_sock;
-static int nl_sock;
 static int nl_fam;
 static uint32_t si_port;
-static uint32_t nl_port;
 static struct pyr_runtime *runtime;
 
 /* libpyronia-specific wrapper around send_message in kernel_comm.h */
-int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
-  int err = -1;;
+static int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
+  int err = -1;
+  /*
   nl_sock = create_netlink_socket(0);
   if(nl_sock < 0){
     printf("create netlink socket failure\n");
     goto out;
-  }
+    }*/
 
-  err = send_message(nl_sock, nl_fam, nl_cmd, nl_attr, nl_port, msg);
-
+  err = send_message(nl_socket_get_fd(si_sock), nl_fam, nl_cmd, nl_attr, si_port, msg);
+  
  out:
-  teardown_netlink_socket(nl_sock);
+  //teardown_netlink_socket(nl_sock);
   return err;
 }
 
@@ -84,12 +84,12 @@ static int handle_callstack_request(struct nl_msg *msg, void *arg) {
 
  out:
     return send_message(nl_socket_get_fd(si_sock), nl_fam, SI_COMM_C_STACK_REQ,
-			SI_COMM_A_USR_MSG, nl_port, "ACK");
+			SI_COMM_A_USR_MSG, si_port, "ACK");
 }
 
 static int init_si_kernel_comm() {
     int err;
-
+    
     si_sock = nl_socket_alloc();
     if (!si_sock) {
       printf("[%s] Could not allocate SI netlink socket\n", __func__);
@@ -97,9 +97,9 @@ static int init_si_kernel_comm() {
     }
     nl_socket_disable_seq_check(si_sock);
     nl_socket_disable_auto_ack(si_sock);
-
+    
     si_port = nl_socket_get_local_port(si_sock);
-
+    
     err = nl_socket_modify_cb(si_sock, NL_CB_VALID, NL_CB_CUSTOM,
                                 handle_callstack_request, NULL);
     if (err < 0) {
@@ -117,7 +117,8 @@ static int init_si_kernel_comm() {
 
  error:
     printf("{%s] Following libnl error occurred: %s\n", __func__, nl_geterror(err));
-    nl_socket_free(si_sock);
+    if (si_sock)
+      nl_socket_free(si_sock);
     return err;
 }
 
@@ -129,28 +130,21 @@ int pyr_init() {
     int err = 0;
     char str[12];
 
-    /* Open the netlink socket */
-    nl_sock = create_netlink_socket(0);
-    if(nl_sock < 0){
-      printf("[%s] create netlink socket failure\n", __func__);
-        return 0;
-    }
-
     /* Initialize the SI socket */
     err = init_si_kernel_comm();
     if (err) {
       printf("[%s] SI socket initialization failure\n", __func__);
     }
 
-    nl_port = getpid();
-    nl_fam = get_family_id(nl_sock, nl_port, FAMILY_STR);
-    teardown_netlink_socket(nl_sock);
-    printf("[%s] Initialized socket at ports %d and %d; SI_COMM family id = %d\n",
-           __func__, nl_port, si_port, nl_fam);
+    nl_fam = get_family_id(nl_socket_get_fd(si_sock), si_port, FAMILY_STR);
 
     sprintf(str, "%d", si_port);
     err = pyr_to_kernel(SI_COMM_C_REGISTER_PROC, SI_COMM_A_USR_MSG, str);
 
+    if (!err)
+          printf("[%s] Initialized socket at port %d; SI_COMM family id = %d\n",
+           __func__, si_port, nl_fam);
+    
     // We don't want the main thread's memdom to be
     // globally accessible, so init with 0.
     // err = smv_main_init(0);
@@ -183,8 +177,25 @@ int pyr_init_runtime(pyr_cg_node_t *(*collect_callstack)(void)) {
     return err;
 }
 
+void pyr_recv_from_kernel() {
+  int err = 0;
+
+  printf("[%s] Listening at port %d\n", __func__, si_port);
+  
+  while(1) {
+    // Receive messages
+    err = nl_recvmsgs_default(si_sock);
+    if (err < 0) {
+      printf("[%s] Error: %d\n", __func__, err);
+      break;
+    }
+  }
+}
+
 /* Do all necessary teardown actions. */
 void pyr_exit() {
   printf("[%s] Exiting Pyronia runtime\n", __func__);
-  close(nl_sock);
+
+  if (si_sock)
+    nl_socket_free(si_sock);
 }

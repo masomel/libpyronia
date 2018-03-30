@@ -14,6 +14,8 @@ int main (int argc, char *argv[]) {
     goto out;
   }
 
+  pyr_recv_from_kernel();
+  
  out:
   //pyr_exit();
   return ret;
