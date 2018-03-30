@@ -46,10 +46,6 @@ libraries/libapparmor/swig/python/libapparmor_wrap.c
 libraries/libapparmor/swig/python/setup.py
 libraries/libapparmor/testsuite/.deps/
 libraries/libapparmor/testsuite/.libs/
-libraries/libapparmor/testsuite/home.pyronia.kernel_permissions_checker_test
-libraries/libapparmor/testsuite/home.pyronia.kernel_permissions_checker_test_py
-libraries/libapparmor/testsuite/kernel_permissions_checker.c
-libraries/libapparmor/testsuite/kernel_permissions_checker_test.py
 libraries/libapparmor/testsuite/test_multi.multi
 libraries/*/CMakeCache.txt
 libraries/*/CMakeFiles/

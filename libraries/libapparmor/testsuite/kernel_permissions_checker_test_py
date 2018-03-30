@@ -1,0 +1,3 @@
+#!/bin/bash
+
+/usr/bin/python kernel_permissions_checker_test.py

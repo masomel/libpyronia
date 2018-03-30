@@ -1,0 +1,23 @@
+/home/pyronia/kernel_permissions_checker_test_py {
+
+network tcp,
+
+# these need to be included by default
+/etc/ld.so.cache r,
+/lib/x86_64-linux-gnu/lib*.so* rm,
+/usr/lib/x86_64-linux-gnu/gconv/* r,
+/dev/tty rw,
+/dev/pts/* rw,
+/usr/lib/locale/locale-archive r,
+/etc/locale.alias r,
+
+/tmp/cam1 r,
+
+/usr/lib/python2.7/** r,
+/usr/local/lib/python2.7/dist-packages/ r,
+/etc/python2.7/* r,
+/usr/bin/python2.7 rix,
+/home/pyronia/kernel_permissions_checker_test.py r,
+
+/home/pyronia/kernel_permissions_checker_test r,
+}
