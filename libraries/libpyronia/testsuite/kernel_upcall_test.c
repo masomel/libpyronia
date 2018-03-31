@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <pyronia_lib.h>
 #include <error.h>
 #include <errno.h>
@@ -27,11 +28,16 @@ static int test_file_open() {
 int main (int argc, char *argv[]) {
   int ret = 0;
   pthread_t tid;
-
-  printf("Initializing Pyronia userland extensions\n");
-
+  pthread_attr_t attr;
+  
+  ret = pthread_attr_init(&attr);
+  if (ret) {
+    // Throw an error
+    printf("pthread_attr_init failed with error %d\n", ret);
+    goto out;
+  }
+  
   ret = pyr_init();
-
   if (ret) {
     // Throw an error
     printf("Got error %d\n", ret);
@@ -39,10 +45,9 @@ int main (int argc, char *argv[]) {
   }
 
   pthread_create(&tid, NULL, wait_for_kernel_reqs, NULL);
-
+  
   test_file_open();
  out:
-  pthread_join(tid, NULL);
   pyr_exit();
   return ret;
 }

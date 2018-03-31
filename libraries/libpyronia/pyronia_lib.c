@@ -25,17 +25,10 @@ static struct pyr_runtime *runtime;
 /* libpyronia-specific wrapper around send_message in kernel_comm.h */
 static int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
   int err = -1;
-  /*
-  nl_sock = create_netlink_socket(0);
-  if(nl_sock < 0){
-    printf("create netlink socket failure\n");
-    goto out;
-    }*/
 
   err = send_message(nl_socket_get_fd(si_sock), nl_fam, nl_cmd, nl_attr, si_port, msg);
   
  out:
-  //teardown_netlink_socket(nl_sock);
   return err;
 }
 
@@ -98,7 +91,8 @@ static int init_si_kernel_comm() {
     nl_socket_disable_seq_check(si_sock);
     nl_socket_disable_auto_ack(si_sock);
     
-    si_port = nl_socket_get_local_port(si_sock);
+    si_port = getpid();
+    nl_socket_set_local_port(si_sock, si_port);
     
     err = nl_socket_modify_cb(si_sock, NL_CB_VALID, NL_CB_CUSTOM,
                                 handle_callstack_request, NULL);

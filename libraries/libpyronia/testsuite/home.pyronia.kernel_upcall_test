@@ -5,6 +5,13 @@ network inet,
 # these need to be included by default
 /etc/ld.so.cache r,
 /lib/x86_64-linux-gnu/libc-2.23.so rm,
+/lib/x86_64-linux-gnu/libpyronia.so rm,
+/lib/x86_64-linux-gnu/libsmv.so rm,
+/lib/x86_64-linux-gnu/libpthread-2.23.so rm,
+/lib/x86_64-linux-gnu/libnl-genl-3.so.200.22.0 rm,
+/lib/x86_64-linux-gnu/libnl-3.so.200.22.0 rm,
+/lib/x86_64-linux-gnu/libm-2.23.so rm,
+/proc/*/net/psched r,
 
 /etc/resolv.conf r,
 /run/resolvconf/resolv.conf r,
