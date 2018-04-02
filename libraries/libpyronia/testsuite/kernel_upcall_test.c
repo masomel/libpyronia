@@ -3,10 +3,11 @@
 #include <pyronia_lib.h>
 #include <error.h>
 #include <errno.h>
+#include <linux/pyronia_mac.h>
 
 #include "testutil.h"
 
-static pyr_cg_node_t *test_callgraph_creation() {
+pyr_cg_node_t *test_callgraph_creation() {
     pyr_cg_node_t *child = NULL;
     int i, err;
     int len = 3;
@@ -18,9 +19,9 @@ static pyr_cg_node_t *test_callgraph_creation() {
 
         err = pyr_new_cg_node(&next, test_libs[i], CAM_DATA, child);
         if (err) {
-            return err;
+	  printf("[%s] Could not create cg node for lib %s\n", __func__, test_libs[i]);
+	  return NULL;
         }
-
         child = next;
     }
 
@@ -45,18 +46,12 @@ static int test_file_open() {
 int main (int argc, char *argv[]) {
   int ret = 0;
 
-  init_test_libs();
+  init_testlibs();
   
-  ret = pyr_init();
+  ret = pyr_init(test_callgraph_creation);
   if (ret) {
     printf("Error initializing Pyronia: %d\n", ret);
     goto out;
-  }
-
-  ret = pyr_init_runtime(test_callgraph_creation);
-  if (ret) {
-      printf("Error initializing runtime callgraph generator: %d\n", ret);
-      goto out;
   }
  
   test_file_open();

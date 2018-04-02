@@ -9,7 +9,7 @@
 
 #include <linux/pyronia_mac.h>
 
-static const char *test_libs[3];
+static char *test_libs[3];
 
 static const char *test_names[2];
 

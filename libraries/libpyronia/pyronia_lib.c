@@ -28,7 +28,7 @@
 static struct nl_sock *si_sock;
 static int nl_fam;
 static uint32_t si_port;
-static struct pyr_runtime *runtime;
+struct pyr_runtime *runtime;
 
 static pthread_t recv_th;
 
@@ -58,7 +58,7 @@ static int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
     char *ser = NULL, *out;
     uint32_t ser_len = 1; // for null-byte
     char *delim = CALLSTACK_STR_DELIM;
-    int ret;
+    int ret, node_count = 0;
 
     if (!callstack)
         goto fail;
@@ -77,22 +77,27 @@ static int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
             goto fail;
 
         strncat(ser, cur_node->lib, strlen(cur_node->lib));
-        if (cur_node->child)
+        if (cur_node->child) {
             // only append a delimiter if the current lib will
             // be followed by another one (i.e. it's not the last)
             strncat(ser, CALLSTACK_STR_DELIM, 1);
+	    ser_len++;
+	}
         ser_len += strlen(cur_node->lib);
         cur_node = cur_node->child;
+	node_count++;
     }
 
     // now we need to pre-append the len so the kernel knows how many
     // nodes to expect to de-serialize
     out = malloc(sizeof(char)*(ser_len+INT32_STR_SIZE));
-    if (out)
+    if (!out)
         goto fail;
-    ret = sprintf(out, "%d,%s", ser_len, ser);
+    ret = sprintf(out, "%d,%s", node_count, ser);
     free(ser);
 
+    printf("[%s] Serialized callstack: %s\n", __func__, out);
+    
     *cs_str = out;
     return ret;
  fail:
@@ -150,13 +155,11 @@ static int handle_callstack_request(struct nl_msg *msg, void *arg) {
         printf("[%s] Sending serialized callstack %s (%d bytes) to kernel\n", __func__, callstack_str, err);
     }
 
-    err = send_message(nl_socket_get_fd(si_sock), nl_fam,
-                        SI_COMM_C_STACK_REQ,
-                        SI_COMM_A_USR_MSG, si_port, callstack_str);
+    err = pyr_to_kernel(SI_COMM_C_STACK_REQ, SI_COMM_A_USR_MSG, callstack_str);
 
  out:
     if (callstack)
-        pyr_free_callgraph(callstack);
+        pyr_free_callgraph(&callstack);
     if (callstack_str)
         free(callstack_str);
     return err;
@@ -221,13 +224,46 @@ static int init_si_kernel_comm() {
     return err;
 }
 
+static int init_runtime(pyr_cg_node_t *(*collect_callstack)(void)) {
+    struct pyr_runtime *r;
+    int err = 0;
+
+    // TODO: allocate this in the secure memdom
+    r = malloc(sizeof(struct pyr_runtime));
+    if (!r) {
+        printf("[%s] No memory for runtime properties\n", __func__);
+        err = -ENOMEM;
+        goto out;
+    }
+
+    if (!collect_callstack) {
+        printf("[%s] Need non-null callstack collect callback\n", __func__);
+        err = -EINVAL;
+        goto out;
+    }
+    r->collect_callstack_cb = collect_callstack;
+    runtime = r;
+
+    printf("[%s] Successfully initialized the runtime\n", __func__);
+    return 0;
+ out:
+    free(r);
+    return err;
+}
+
 /* Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
  * channel and initialize the SMV backend.
  */
-int pyr_init() {
+int pyr_init(pyr_cg_node_t *(*collect_callstack_cb)(void)) {
     int err = 0;
     char str[INT32_STR_SIZE];
+
+    /* Initialize the runtime metadata */
+    err = init_runtime(collect_callstack_cb);
+    if (err) {
+      printf("[%s] Runtime initialization failure\n", __func__);
+    }
 
     /* Initialize the SI socket */
     err = init_si_kernel_comm();
@@ -251,31 +287,6 @@ int pyr_init() {
     return err;
 }
 
-int pyr_init_runtime(pyr_cg_node_t *(*collect_callstack)(void)) {
-    struct pyr_runtime *r;
-    int err = 0;
-
-    // TODO: allocate this in the secure memdom
-    r = malloc(sizeof(struct pyr_runtime));
-    if (!r) {
-        printf("[%s] No memory for runtime properties\n", __func__);
-        err = -ENOMEM;
-        goto out;
-    }
-
-    if (!collect_callstack) {
-        printf("[%s] Need non-null callstack collect callback\n", __func__);
-        err = -EINVAL;
-        goto out;
-    }
-    r->collect_callstack_cb = collect_callstack;
-    runtime = r;
-
- out:
-    free(r);
-    return err;
-}
-
 /* Do all necessary teardown actions. */
 void pyr_exit() {
   printf("[%s] Exiting Pyronia runtime\n", __func__);
@@ -284,4 +295,53 @@ void pyr_exit() {
 
   if (si_sock)
     nl_socket_free(si_sock);
+}
+
+// Allocate a new callgraph node
+int pyr_new_cg_node(pyr_cg_node_t **cg_root, const char* lib,
+                        enum pyr_data_types data_type,
+                        pyr_cg_node_t *child) {
+
+    pyr_cg_node_t *n = malloc(sizeof(pyr_cg_node_t));
+
+    if (n == NULL) {
+        goto fail;
+    }
+
+    n->lib = malloc(strlen(lib)+1);
+    if (!n->lib)
+      goto fail;
+    memcpy(n->lib, lib, strlen(lib));
+    n->data_type = data_type;
+    n->child = child;
+
+    *cg_root = n;
+    return 0;
+ fail:
+    free(n);
+    return -1;
+}
+
+// Recursively free the callgraph nodes
+static void free_node(pyr_cg_node_t **node) {
+    pyr_cg_node_t *n = *node;
+
+    if (n == NULL) {
+      return;
+    }
+
+    if (n->child == NULL) {
+        n->lib = NULL;
+        free(n->lib);
+        free(n);
+    }
+    else {
+        free_node(&(n->child));
+    }
+    *node = NULL;
+}
+
+// Free a callgraph
+void pyr_free_callgraph(pyr_cg_node_t **cg_root) {
+    free_node(cg_root);
 }
