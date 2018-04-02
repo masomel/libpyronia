@@ -15,7 +15,6 @@ extern "C" {
 
 int pyr_init(void);
 void pyr_exit(void);
-void pyr_recv_from_kernel(void);
 int pyr_init_runtime(pyr_cg_node_t *(*collect_callstack)(void));
 
 #ifdef __cplusplus

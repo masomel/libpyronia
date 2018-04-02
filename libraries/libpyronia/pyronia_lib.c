@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <sys/syscall.h>
 #include <kernel_comm.h>
+#include <pthread.h>
 #include <netlink/netlink.h>
 #include <netlink/msg.h>
 #include <netlink/socket.h>
@@ -21,6 +22,8 @@ static struct nl_sock *si_sock;
 static int nl_fam;
 static uint32_t si_port;
 static struct pyr_runtime *runtime;
+
+static pthread_t recv_th;
 
 /* libpyronia-specific wrapper around send_message in kernel_comm.h */
 static int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
@@ -45,7 +48,7 @@ static int handle_callstack_request(struct nl_msg *msg, void *arg) {
     pyr_cg_node_t *callstack;
     int err;
 
-    printf("[%s] The kernel module sent a message.\n", __func__);
+    //printf("[%s] The kernel module sent a message.\n", __func__);
 
     nl_hdr = nlmsg_hdr(msg);
     genl_hdr = genlmsg_hdr(nl_hdr);
@@ -80,6 +83,26 @@ static int handle_callstack_request(struct nl_msg *msg, void *arg) {
 			SI_COMM_A_USR_MSG, si_port, "ACK");
 }
 
+// this gets called in a separate receiver thread
+// so just make the function signature fit what pthread_create expects
+static void *pyr_recv_from_kernel(void *args) {
+  int err = 0;
+
+  //printf("[%s] Listening at port %d\n", __func__, si_port);
+
+  // FIXME: there's probably a much better way to do this, maybe
+  // use condition variables?
+  while(1) {
+    // Receive messages
+    err = nl_recvmsgs_default(si_sock);
+    if (err < 0) {
+      printf("[%s] Error: %d\n", __func__, err);
+      break;
+    }
+  }
+  return NULL;
+}
+
 static int init_si_kernel_comm() {
     int err;
     
@@ -107,6 +130,8 @@ static int init_si_kernel_comm() {
       goto error;
     }
 
+    pthread_create(&recv_th, NULL, pyr_recv_from_kernel, NULL);
+    
     return 0;
 
  error:
@@ -131,7 +156,7 @@ int pyr_init() {
     }
 
     nl_fam = get_family_id(nl_socket_get_fd(si_sock), si_port, FAMILY_STR);
-
+    
     sprintf(str, "%d", si_port);
     err = pyr_to_kernel(SI_COMM_C_REGISTER_PROC, SI_COMM_A_USR_MSG, str);
 
@@ -171,25 +196,12 @@ int pyr_init_runtime(pyr_cg_node_t *(*collect_callstack)(void)) {
     return err;
 }
 
-void pyr_recv_from_kernel() {
-  int err = 0;
-
-  printf("[%s] Listening at port %d\n", __func__, si_port);
-  
-  while(1) {
-    // Receive messages
-    err = nl_recvmsgs_default(si_sock);
-    if (err < 0) {
-      printf("[%s] Error: %d\n", __func__, err);
-      break;
-    }
-  }
-}
-
 /* Do all necessary teardown actions. */
 void pyr_exit() {
   printf("[%s] Exiting Pyronia runtime\n", __func__);
 
+  // TODO: kill the receiver thread
+  
   if (si_sock)
     nl_socket_free(si_sock);
 }

@@ -21,5 +21,5 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -g ${LIBNL3_CFLAGS}")
 add_library(pyronia_lib SHARED pyronia_lib.c)
 add_library(pyronia SHARED pyronia_lib.c)
 
-target_link_libraries(pyronia ${LIBNL3_LIBRARIES} pyronia_lib smv) 
+target_link_libraries(pyronia ${LIBNL3_LIBRARIES} pyronia_lib smv pthread) 
 
