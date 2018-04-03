@@ -39,6 +39,7 @@
 #define AA_EXEC_MOD_1			(1 << 11)
 #define AA_EXEC_MOD_2			(1 << 12)
 #define AA_EXEC_MOD_3			(1 << 13)
+#define AA_LIB_DEFAULT                  (1 << 14)
 
 #define AA_BASE_PERMS			(AA_MAY_EXEC | AA_MAY_WRITE | \
 					 AA_MAY_READ | AA_MAY_APPEND | \

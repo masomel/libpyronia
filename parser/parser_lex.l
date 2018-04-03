@@ -195,7 +195,7 @@ COLON		:
 AMPERSAND	&
 END_OF_RULE	[,]
 RANGE		-
-MODE_CHARS 	([RrWwaLlMmkXx])|(([Pp]|[Cc])[Xx])|(([Pp]|[Cc])?([IiUu])[Xx])
+MODE_CHARS 	([RrWwaLlMmkXxd])|(([Pp]|[Cc])[Xx])|(([Pp]|[Cc])?([IiUu])[Xx])
 MODES		{MODE_CHARS}+
 WS		[[:blank:]]
 NUMBER		[[:digit:]]+

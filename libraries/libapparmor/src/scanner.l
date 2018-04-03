@@ -88,7 +88,7 @@ hexstring	({hex}{hex})+
 period		"\."
 question_mark	"?"
 single_quote	"'"
-mode_chars      ([RrWwaLlMmkXx])|([Pp][Xx])|([Uu][Xx])|([Ii][Xx])|([Pp][Ii][Xx])
+mode_chars      ([RrWwaLlMmkXxd])|([Pp][Xx])|([Uu][Xx])|([Ii][Xx])|([Pp][Ii][Xx])
 modes		({mode_chars}+)|({mode_chars}+::{mode_chars}*)|(::{mode_chars}*)
 /* New message types */
 
