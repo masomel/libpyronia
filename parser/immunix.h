@@ -47,7 +47,8 @@
 					 AA_EXEC_PUX | AA_OLD_EXEC_MMAP | \
 					 AA_EXEC_UNSAFE | AA_EXEC_INHERIT | \
 					 AA_EXEC_MOD_0 | AA_EXEC_MOD_1 | \
-					 AA_EXEC_MOD_2 | AA_EXEC_MOD_3)
+					 AA_EXEC_MOD_2 | AA_EXEC_MOD_3 | \
+					 AA_LIB_DEFAULT)
 
 #define AA_USER_SHIFT			0
 #define AA_OTHER_SHIFT			14
