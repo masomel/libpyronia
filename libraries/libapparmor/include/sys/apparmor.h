@@ -46,7 +46,6 @@ __BEGIN_DECLS
 #define AA_MAY_GETCRED			(1 << 11)
 #define AA_MAY_CHMOD			(1 << 12)
 #define AA_MAY_CHOWN			(1 << 13)
-#define AA_LIB_DEFAULT                  (1 << 14)
 #define AA_MAY_LOCK			0x8000
 #define AA_EXEC_MMAP			0x10000
 #define AA_MAY_LINK			0x40000

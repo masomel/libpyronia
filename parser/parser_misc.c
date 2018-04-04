@@ -453,6 +453,7 @@ reeval:
                 case COD_LIB_DEFAULT_CHAR:
                     /* Pyronia hook: this tells us to load a given
                      * rule as a default rule for all libraries. */
+		    PDEBUG("Parsing mode: found %s DEFAULT\n", mode_desc);
                     mode |= AA_LIB_DEFAULT;
                     break;
 
