@@ -21,6 +21,8 @@ Author: Marcela S. Melara
 import os
 import sys
 
+# TODO: use single list of defaults, and generate dynamically
+
 def writeln(f, to_write):
     f.write(to_write+'\n')
 
@@ -29,16 +31,16 @@ def create_apparmor_prof(prof_path, app):
     z = open(prof_path, 'w')
     writeln(z, app+" {")
     writeln(z, "# these need to be included by default")
-    writeln(z, "/etc/ld.so.cache rd,")
-    writeln(z, "/lib/x86_64-linux-gnu/libc-2.23.so rmd,")
-    writeln(z, "/lib/x86_64-linux-gnu/libpyronia.so rmd,")
-    writeln(z, "/lib/x86_64-linux-gnu/libsmv.so rmd,")
-    writeln(z, "/lib/x86_64-linux-gnu/libpthread-2.23.so rmd,")
-    writeln(z, "/lib/x86_64-linux-gnu/libnl-genl-3.so.200.22.0 rmd,")
-    writeln(z, "/lib/x86_64-linux-gnu/libnl-3.so.200.22.0 rmd,")
-    writeln(z, "/lib/x86_64-linux-gnu/libm-2.23.so rmd,")
-    writeln(z, "/proc/*/net/psched rd,")
-    writeln(z, "/dev/pts/* rd,")
+    writeln(z, "/etc/ld.so.cache r,")
+    writeln(z, "/lib/x86_64-linux-gnu/libc-2.23.so rm,")
+    writeln(z, "/lib/x86_64-linux-gnu/libpyronia.so rm,")
+    writeln(z, "/lib/x86_64-linux-gnu/libsmv.so rm,")
+    writeln(z, "/lib/x86_64-linux-gnu/libpthread-2.23.so rm,")
+    writeln(z, "/lib/x86_64-linux-gnu/libnl-genl-3.so.200.22.0 rm,")
+    writeln(z, "/lib/x86_64-linux-gnu/libnl-3.so.200.22.0 rm,")
+    writeln(z, "/lib/x86_64-linux-gnu/libm-2.23.so rm,")
+    writeln(z, "/proc/*/net/psched r,")
+    writeln(z, "/dev/pts/* r,")
     writeln(z, "")
     writeln(z, "# TODO: replace these with YOUR resource access rules")
     writeln(z, "<file1> <perms>,")
@@ -49,7 +51,17 @@ def create_apparmor_prof(prof_path, app):
 
 def create_lib_prof(prof_path):
     z = open(prof_path, 'w')
-    writeln(z, "# TODO: replace these with YOUR per-library resources")
+    writeln(z, "d /etc/ld.so.cache,")
+    writeln(z, "d /lib/x86_64-linux-gnu/libc-2.23.so,")
+    writeln(z, "d /lib/x86_64-linux-gnu/libpyronia.so,")
+    writeln(z, "d /lib/x86_64-linux-gnu/libsmv.so,")
+    writeln(z, "d /lib/x86_64-linux-gnu/libpthread-2.23.so,")
+    writeln(z, "d /lib/x86_64-linux-gnu/libnl-genl-3.so.200.22.0,")
+    writeln(z, "d /lib/x86_64-linux-gnu/libnl-3.so.200.22.0,")
+    writeln(z, "d /lib/x86_64-linux-gnu/libm-2.23.so,")
+    writeln(z, "d /proc/*/net/psched,")
+    writeln(z, "d /dev/pts/*,")
+    writeln(z, "")
     writeln(z, "<lib1> <file1>,")
     writeln(z, "<lib2> <file1>,")
     writeln(z, "<lib2> <file2,")

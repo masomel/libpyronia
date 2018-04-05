@@ -148,7 +148,6 @@ struct var_string {
 #define COD_UNSAFE_PROFILE_CHAR	'p'
 #define COD_LOCAL_CHAR		'C'
 #define COD_UNSAFE_LOCAL_CHAR	'c'
-#define COD_LIB_DEFAULT_CHAR    'd'
 
 #define OPTION_ADD      1
 #define OPTION_REMOVE   2

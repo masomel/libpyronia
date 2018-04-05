@@ -450,13 +450,6 @@ reeval:
 			mode |= AA_MAY_EXEC;
 			break;
 
-                case COD_LIB_DEFAULT_CHAR:
-                    /* Pyronia hook: this tells us to load a given
-                     * rule as a default rule for all libraries. */
-		    PDEBUG("Parsing mode: found %s DEFAULT\n", mode_desc);
-                    mode |= AA_LIB_DEFAULT;
-                    break;
-
  		/* error cases */
 
 		default:
@@ -469,7 +462,6 @@ reeval:
 			case COD_INHERIT_CHAR:
 			case COD_MMAP_CHAR:
 			case COD_EXEC_CHAR:
-                        case COD_LIB_DEFAULT_CHAR:
 				PDEBUG("Parsing mode: found invalid upper case char %c\n", thisc);
 				warn_uppercase();
 				thisc = lower;

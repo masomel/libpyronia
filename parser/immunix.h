@@ -38,8 +38,7 @@
 #define AA_EXEC_MOD_0			(1 << 10)
 #define AA_EXEC_MOD_1			(1 << 11)
 #define AA_EXEC_MOD_2			(1 << 12)
-//#define AA_EXEC_MOD_3			(1 << 14)
-#define AA_LIB_DEFAULT                  (1 << 13)
+#define AA_EXEC_MOD_3			(1 << 13)
 
 #define AA_BASE_PERMS			(AA_MAY_EXEC | AA_MAY_WRITE | \
 					 AA_MAY_READ | AA_MAY_APPEND | \
@@ -47,8 +46,7 @@
 					 AA_EXEC_PUX | AA_OLD_EXEC_MMAP | \
 					 AA_EXEC_UNSAFE | AA_EXEC_INHERIT | \
 					 AA_EXEC_MOD_0 | AA_EXEC_MOD_1 | \
-					 AA_EXEC_MOD_2 | /*AA_EXEC_MOD_3 |*/ \
-					 AA_LIB_DEFAULT)
+					 AA_EXEC_MOD_2 | AA_EXEC_MOD_3)
 
 #define AA_USER_SHIFT			0
 #define AA_OTHER_SHIFT			14
@@ -64,8 +62,8 @@
 #define AA_SHARED_PERMS			(AA_CHANGE_HAT | AA_CHANGE_PROFILE)
 
 #define AA_EXEC_MODIFIERS		(AA_EXEC_MOD_0 | AA_EXEC_MOD_1 | \
-					 AA_EXEC_MOD_2 /*| AA_EXEC_MOD_3*/)
-#define AA_EXEC_COUNT			14
+					 AA_EXEC_MOD_2 | AA_EXEC_MOD_3)
+#define AA_EXEC_COUNT			16
 
 #define AA_USER_EXEC_MODIFIERS		(AA_EXEC_MODIFIERS << AA_USER_SHIFT)
 #define AA_OTHER_EXEC_MODIFIERS		(AA_EXEC_MODIFIERS << AA_OTHER_SHIFT)
