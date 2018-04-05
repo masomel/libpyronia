@@ -10,6 +10,7 @@
 /lib/x86_64-linux-gnu/libm-2.23.so rm,
 /proc/*/net/psched r,
 /dev/pts/* r,
+/home/pyronia/libpyronia/libraries/libpyronia/testsuite/home.pyronia.kernel_upcall_test-lib.prof r,
 
 /tmp/cam0 r,
 network inet,

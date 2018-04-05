@@ -25,6 +25,7 @@ pyr_cg_node_t *test_callgraph_creation() {
 	  return NULL;
         }
         child = next;
+	i--;
     }
 
     return child;
@@ -56,6 +57,7 @@ int main (int argc, char *argv[]) {
     goto out;
   }
  
+  test_file_open();
   test_file_open();
  out:
   return ret;

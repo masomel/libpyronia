@@ -41,6 +41,7 @@ def create_apparmor_prof(prof_path, app):
     writeln(z, "/lib/x86_64-linux-gnu/libm-2.23.so rm,")
     writeln(z, "/proc/*/net/psched r,")
     writeln(z, "/dev/pts/* r,")
+    writeln(z, prof_path+"-lib.prof r,")
     writeln(z, "")
     writeln(z, "# TODO: replace these with YOUR resource access rules")
     writeln(z, "<file1> <perms>,")

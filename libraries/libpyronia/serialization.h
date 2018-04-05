@@ -4,8 +4,8 @@
  *@author Marcela S. Melara
  */
 
-#ifndef __PYR_SERIALIZE_H
-#define __PYR_SERIALIZE_H
+#ifndef PYR_SERIALIZE_H
+#define PYR_SERIALIZE_H
 
 #include <linux/pyronia_mac.h>
 
@@ -22,4 +22,4 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed);
 }
 #endif
 
-#endif /* __PYR_SERIALIZE_H */
+#endif /* PYR_SERIALIZE_H */

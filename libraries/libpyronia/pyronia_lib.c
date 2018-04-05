@@ -62,7 +62,7 @@ static int handle_callstack_request(struct nl_msg *msg, void *arg) {
     char *callstack_str;
     int err;
 
-    //printf("[%s] The kernel module sent a message.\n", __func__);
+    printf("[%s] The kernel module sent a message.\n", __func__);
 
     nl_hdr = nlmsg_hdr(msg);
     genl_hdr = genlmsg_hdr(nl_hdr);
@@ -112,7 +112,7 @@ static int handle_callstack_request(struct nl_msg *msg, void *arg) {
 static void *pyr_recv_from_kernel(void *args) {
   int err = 0;
 
-  //printf("[%s] Listening at port %d\n", __func__, si_port);
+  printf("[%s] Listening at port %d\n", __func__, si_port);
 
   // FIXME: there's probably a much better way to do this, maybe
   // use condition variables?
@@ -226,28 +226,34 @@ int pyr_init(const char *lib_policy_file,
         goto fail;
     }
 
-    reg_str = malloc(INT32_STR_SIZE+strlen(policy));
+    reg_str = malloc(INT32_STR_SIZE+strlen(policy)+1);
     if (!reg_str) {
         goto fail;
     }
 
-    sprintf(reg_str, "%d:%s", si_port, reg_str);
+    sprintf(reg_str, "%d:%s", si_port, policy);
     err = pyr_to_kernel(SI_COMM_C_REGISTER_PROC, SI_COMM_A_USR_MSG, reg_str);
     if (err) {
         goto fail;
     }
+
+    if (policy)
+      free(policy);
+    if (reg_str)
+      free(reg_str);
 
     printf("[%s] Initialized socket at port %d; SI_COMM family id = %d\n",
            __func__, si_port, nl_fam);
 
     // We don't want the main thread's memdom to be
     // globally accessible, so init with 0.
-    // err = smv_main_init(0);
-
+    // err = smv_main_init(0);	
     return 0;
  fail:
     if (policy)
         free(policy);
+    if (reg_str)
+      free(reg_str);
     return err;
 }
 

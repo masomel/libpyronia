@@ -3,8 +3,10 @@
  *
  *@author Marcela S. Melara
  */
-
-#include <linux/pyronia_netlink.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include <linux/pyronia_mac.h>
 
 #include "serialization.h"
@@ -23,7 +25,7 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
 
     if (!callstack)
         goto fail;
-
+    
     cur_node = callstack;
     while (cur_node) {
         // let's sanity check our lib name first (i.e. it should not
@@ -104,7 +106,7 @@ static int read_policy_file(const char *policy_fname, char **buf) {
  */
 int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
 
-    int count, c_idx = 0;
+  int count, rule_len;
     char *ser = NULL, *out;
     uint32_t ser_len = 1; // for null-byte
     int ret;
@@ -117,37 +119,46 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
 
     // loop through the policy to serialize it into
     // a format that can be interpreted by the LSM
-    while(c_idx < strlen(policy)) {
-        char *next_rule = strchr(policy+c_idx, ',');
-        if (!next_rule) {
-            // this means our file is malformed
-            // bc we don't have a valid rule line
-            printf("[%s] Oops, malformed policy file %s. Rules need to be comma-separated\n", __func__, policy_fname);
-            goto fail;
+    char *next_rule = strsep(&policy, "\n");
+    while(next_rule) {
+        if (*next_rule == 0) {
+	   // our next rule is a null byte since we just parsed an empty line
+	   goto skip;
         }
+      
+	printf("[%s] Next lib rule to parse: %s\n", __func__, next_rule);
 
-        int rule_len = next_rule - (policy+c_idx);
+	rule_len = strlen(next_rule);
         ser = realloc(ser, ser_len+rule_len);
-        if (!ser)
+        if (!ser) {
+	    ret = -1;
             goto fail;
+	}
 
-        strncat(ser, policy+c_idx, rule_len);
-        c_idx += rule_len;
-
-        // our policy likely has a rule on each line, so make sure
-        // we advance the pointer accordingly
-        while((policy[c_idx]) == '\n')
-            c_idx++;
-
+        strncat(ser, next_rule, rule_len);
+	
         ser_len += rule_len;
         count++;
+    skip:
+	next_rule = strsep(&policy, "\n");
+    }
+
+    if (count == 0) {
+      // this means our file is malformed
+      // bc we don't have a single valid rule line
+      printf("[%s] Oops, malformed policy file %s. Rules need to be comma-separated\n", __func__, policy_fname);
+      ret = -1;
+      goto fail;
     }
 
     // now we need to pre-append the len so the kernel knows how many
     // nodes to expect to de-serialize
     out = malloc(sizeof(char)*(ser_len+INT32_STR_SIZE));
-    if (!out)
+    if (!out) {
+        ret = -1;
         goto fail;
+    }
+    
     ret = sprintf(out, "%d,%s", count, ser);
     free(ser);
 
@@ -159,5 +170,5 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
     if (ser)
         free(ser);
     *parsed = NULL;
-    return err;
+    return ret;
 }
