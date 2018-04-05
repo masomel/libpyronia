@@ -1,7 +1,4 @@
 /home/pyronia/kernel_upcall_test {
-
-network inet,
-
 # these need to be included by default
 /etc/ld.so.cache rd,
 /lib/x86_64-linux-gnu/libc-2.23.so rmd,
@@ -14,16 +11,6 @@ network inet,
 /proc/*/net/psched rd,
 /dev/pts/* rd,
 
-/etc/resolv.conf r,
-/run/resolvconf/resolv.conf r,
-/etc/nsswitch.conf r,
-/etc/host.conf r,
-/etc/hosts r,
-/lib/x86_64-linux-gnu/libnss_dns-2.23.so rm,
-/lib/x86_64-linux-gnu/libnss_files-2.23.so rm,
-/lib/x86_64-linux-gnu/libnss_mdns4_minimal.so.2 rm,
-/lib/x86_64-linux-gnu/libresolv-2.23.so rm,
-
 /tmp/cam0 r,
-
+network inet,
 }

@@ -7,6 +7,8 @@
 
 #include "testutil.h"
 
+#define LIB_POLICY "/home/pyronia/libpyronia/libraries/libpyronia/testsuite/home.pyronia.kernel_upcall_test-lib.prof"
+
 pyr_cg_node_t *test_callgraph_creation() {
     pyr_cg_node_t *child = NULL;
     int i, err;
@@ -48,7 +50,7 @@ int main (int argc, char *argv[]) {
 
   init_testlibs();
   
-  ret = pyr_init(test_callgraph_creation);
+  ret = pyr_init(LIB_POLICY, test_callgraph_creation);
   if (ret) {
     printf("Error initializing Pyronia: %d\n", ret);
     goto out;

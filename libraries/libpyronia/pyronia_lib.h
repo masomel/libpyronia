@@ -13,7 +13,8 @@ struct pyr_runtime {
 extern "C" {
 #endif
 
-int pyr_init(pyr_cg_node_t *(*collect_callstack_cb)(void));
+int pyr_init(const char *lib_policy_file,
+             pyr_cg_node_t *(*collect_callstack_cb)(void));
 void pyr_exit(void);
 
 #ifdef __cplusplus
