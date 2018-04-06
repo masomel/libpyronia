@@ -226,7 +226,7 @@ int pyr_init(const char *lib_policy_file,
         goto fail;
     }
 
-    reg_str = malloc(INT32_STR_SIZE+strlen(policy)+1);
+    reg_str = malloc(sizeof(char)*(INT32_STR_SIZE+strlen(policy)+1));
     if (!reg_str) {
         goto fail;
     }

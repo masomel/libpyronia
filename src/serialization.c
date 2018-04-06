@@ -35,18 +35,15 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
             goto fail;
         }
 
-        ser = realloc(ser, ser_len+strlen(cur_node->lib)+1);
+	printf("Serializing: %s\n", cur_node->lib);
+
+        ser = realloc(ser, sizeof(char)*(ser_len+strlen(cur_node->lib)+1));
         if (!ser)
             goto fail;
 
         strncat(ser, cur_node->lib, strlen(cur_node->lib));
-        if (cur_node->child) {
-            // only append a delimiter if the current lib will
-            // be followed by another one (i.e. it's not the last)
-            strncat(ser, CALLSTACK_STR_DELIM, 1);
-            ser_len++;
-        }
-        ser_len += strlen(cur_node->lib);
+	strncat(ser, CALLSTACK_STR_DELIM, 1);
+        ser_len += strlen(cur_node->lib)+1;
         cur_node = cur_node->child;
         node_count++;
     }
@@ -86,7 +83,8 @@ static int read_policy_file(const char *policy_fname, char **buf) {
         }
         read = fread(buffer, 1, length, f);
         if (read != length) {
-            goto fail;
+	  printf("bad length: %d != %d\n", read, length);
+	  goto fail;
         }
 
         *buf = buffer;
@@ -129,7 +127,7 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
 	printf("[%s] Next lib rule to parse: %s\n", __func__, next_rule);
 
 	rule_len = strlen(next_rule);
-        ser = realloc(ser, ser_len+rule_len);
+        ser = realloc(ser, sizeof(char)*(ser_len+rule_len));
         if (!ser) {
 	    ret = -1;
             goto fail;
