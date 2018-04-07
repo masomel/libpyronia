@@ -25,7 +25,7 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
 
     if (!callstack)
         goto fail;
-    
+
     cur_node = callstack;
     while (cur_node) {
         // let's sanity check our lib name first (i.e. it should not
@@ -35,14 +35,12 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
             goto fail;
         }
 
-	printf("Serializing: %s\n", cur_node->lib);
-
         ser = realloc(ser, sizeof(char)*(ser_len+strlen(cur_node->lib)+1));
         if (!ser)
             goto fail;
 
         strncat(ser, cur_node->lib, strlen(cur_node->lib));
-	strncat(ser, CALLSTACK_STR_DELIM, 1);
+        strncat(ser, CALLSTACK_STR_DELIM, 1);
         ser_len += strlen(cur_node->lib)+1;
         cur_node = cur_node->child;
         node_count++;
@@ -55,8 +53,6 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
         goto fail;
     ret = sprintf(out, "%d,%s", node_count, ser);
     free(ser);
-
-    printf("[%s] Serialized callstack: %s\n", __func__, out);
 
     *cs_str = out;
     return ret;
@@ -83,8 +79,8 @@ static int read_policy_file(const char *policy_fname, char **buf) {
         }
         read = fread(buffer, 1, length, f);
         if (read != length) {
-	  printf("bad length: %d != %d\n", read, length);
-	  goto fail;
+          printf("bad length: %d != %d\n", read, length);
+          goto fail;
         }
 
         *buf = buffer;
@@ -120,25 +116,23 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
     char *next_rule = strsep(&policy, "\n");
     while(next_rule) {
         if (*next_rule == 0) {
-	   // our next rule is a null byte since we just parsed an empty line
-	   goto skip;
+           // our next rule is a null byte since we just parsed an empty line
+           goto skip;
         }
-      
-	printf("[%s] Next lib rule to parse: %s\n", __func__, next_rule);
 
-	rule_len = strlen(next_rule);
+        rule_len = strlen(next_rule);
         ser = realloc(ser, sizeof(char)*(ser_len+rule_len));
         if (!ser) {
-	    ret = -1;
+            ret = -1;
             goto fail;
-	}
+        }
 
         strncat(ser, next_rule, rule_len);
-	
+
         ser_len += rule_len;
         count++;
     skip:
-	next_rule = strsep(&policy, "\n");
+        next_rule = strsep(&policy, "\n");
     }
 
     if (count == 0) {
@@ -156,11 +150,9 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
         ret = -1;
         goto fail;
     }
-    
+
     ret = sprintf(out, "%d,%s", count, ser);
     free(ser);
-
-    printf("[%s] Serialized policy: %s\n", __func__, out);
 
     *parsed = out;
     return ret;

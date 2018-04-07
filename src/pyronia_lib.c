@@ -123,6 +123,9 @@ static void *pyr_recv_from_kernel(void *args) {
       printf("[%s] Error: %d\n", __func__, err);
       break;
     }
+    else {
+        printf("[%s] Read %d bytes\n", __func__, err);
+    }
   }
   return NULL;
 }
@@ -153,8 +156,6 @@ static int init_si_kernel_comm() {
       printf("[%s] SI netlink socket connection failed: %d\n", __func__, err);
       goto fail;
     }
-
-    pthread_create(&recv_th, NULL, pyr_recv_from_kernel, NULL);
 
     return 0;
 
@@ -193,6 +194,15 @@ static int init_runtime(pyr_cg_node_t *(*collect_callstack)(void)) {
     return err;
 }
 
+static void init_callstack_req_thread() {
+    pthread_attr_t attr;
+
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+    pthread_create(&recv_th, &attr, pyr_recv_from_kernel, NULL);
+}
+
 /* Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
  * channel and initialize the SMV backend.
@@ -226,6 +236,7 @@ int pyr_init(const char *lib_policy_file,
         goto fail;
     }
 
+    /* Register this process as a Pyronia-secured process */
     reg_str = malloc(sizeof(char)*(INT32_STR_SIZE+strlen(policy)+1));
     if (!reg_str) {
         goto fail;
@@ -236,6 +247,9 @@ int pyr_init(const char *lib_policy_file,
     if (err) {
         goto fail;
     }
+
+    /* Start the callstack request receiver thread */
+    init_callstack_req_thread();
 
     if (policy)
       free(policy);
@@ -260,8 +274,6 @@ int pyr_init(const char *lib_policy_file,
 /* Do all necessary teardown actions. */
 void pyr_exit() {
   printf("[%s] Exiting Pyronia runtime\n", __func__);
-
-  // TODO: kill the receiver thread
 
   if (si_sock)
     nl_socket_free(si_sock);
@@ -288,7 +300,8 @@ int pyr_new_cg_node(pyr_cg_node_t **cg_root, const char* lib,
     *cg_root = n;
     return 0;
  fail:
-    free(n);
+    if (n)
+        free(n);
     return -1;
 }
 
@@ -301,7 +314,6 @@ static void free_node(pyr_cg_node_t **node) {
     }
 
     if (n->child == NULL) {
-        n->lib = NULL;
         free(n->lib);
         free(n);
     }
