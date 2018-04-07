@@ -17,12 +17,6 @@ static const char *test_names[2];
 
 static const char *default_names[NUM_DEFAULT];
 
-static inline void init_testlibs(void) {
-    test_libs[0] = "cam";
-    test_libs[1] = "http";
-    test_libs[2] = "img_processing";
-}
-
 static inline void init_testnames(void) {
     test_names[0] = "/tmp/cam0";
     test_names[1] = "127.0.0.1";

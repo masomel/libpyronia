@@ -9,6 +9,12 @@
 
 #define LIB_POLICY "/home/pyronia/libpyronia/testsuite/home.pyronia.kernel_upcall_test-lib.prof"
 
+static inline void init_testlibs(void) {
+    test_libs[0] = "cam";
+    test_libs[1] = "http";
+    test_libs[2] = "img_processing";
+}
+
 pyr_cg_node_t *test_callgraph_creation() {
     pyr_cg_node_t *child = NULL;
     int i, err;

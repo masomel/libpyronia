@@ -112,19 +112,14 @@ static int handle_callstack_request(struct nl_msg *msg, void *arg) {
 static void *pyr_recv_from_kernel(void *args) {
   int err = 0;
 
-  printf("[%s] Listening at port %d\n", __func__, si_port);
-
-  // FIXME: there's probably a much better way to do this, maybe
-  // use condition variables?
   while(1) {
+    printf("[%s] Listening at port %d\n", __func__, si_port);
+    
     // Receive messages
     err = nl_recvmsgs_default(si_sock);
     if (err < 0) {
       printf("[%s] Error: %d\n", __func__, err);
       break;
-    }
-    else {
-        printf("[%s] Read %d bytes\n", __func__, err);
     }
   }
   return NULL;
@@ -217,14 +212,14 @@ int pyr_init(const char *lib_policy_file,
     err = init_runtime(collect_callstack_cb);
     if (err) {
       printf("[%s] Runtime initialization failure\n", __func__);
-      goto fail;
+      goto out;
     }
 
     /* Initialize the SI socket */
     err = init_si_kernel_comm();
     if (err) {
       printf("[%s] SI socket initialization failure\n", __func__);
-      goto fail;
+      goto out;
     }
 
     nl_fam = get_family_id(nl_socket_get_fd(si_sock), si_port, FAMILY_STR);
@@ -233,41 +228,38 @@ int pyr_init(const char *lib_policy_file,
     err = pyr_parse_lib_policy(lib_policy_file, &policy);
     if (err < 0) {
         printf("[%s] Parsing lib policy failure\n", __func__);
-        goto fail;
+        goto out;
     }
-
+    
     /* Register this process as a Pyronia-secured process */
-    reg_str = malloc(sizeof(char)*(INT32_STR_SIZE+strlen(policy)+1));
+    reg_str = malloc(INT32_STR_SIZE+strlen(policy)+2);
     if (!reg_str) {
-        goto fail;
+        goto out;
     }
 
     sprintf(reg_str, "%d:%s", si_port, policy);
     err = pyr_to_kernel(SI_COMM_C_REGISTER_PROC, SI_COMM_A_USR_MSG, reg_str);
     if (err) {
-        goto fail;
+        goto out;
     }
 
     /* Start the callstack request receiver thread */
     init_callstack_req_thread();
 
+    // We don't want the main thread's memdom to be
+    // globally accessible, so init with 0.
+    // err = smv_main_init(0);
+    
+ out:
     if (policy)
       free(policy);
     if (reg_str)
       free(reg_str);
 
-    printf("[%s] Initialized socket at port %d; SI_COMM family id = %d\n",
+    if (!err)
+      printf("[%s] Initialized socket at port %d; SI_COMM family id = %d\n",
            __func__, si_port, nl_fam);
-
-    // We don't want the main thread's memdom to be
-    // globally accessible, so init with 0.
-    // err = smv_main_init(0);	
-    return 0;
- fail:
-    if (policy)
-        free(policy);
-    if (reg_str)
-      free(reg_str);
+    
     return err;
 }
 

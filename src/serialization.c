@@ -7,6 +7,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <errno.h>
+#include <error.h>
 #include <linux/pyronia_mac.h>
 
 #include "serialization.h"
@@ -18,10 +20,10 @@
 // Caller must free the string.
 int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
     pyr_cg_node_t *cur_node;
-    char *ser = NULL, *out;
-    uint32_t ser_len = 1; // for null-byte
+    char *ser = NULL, *out, *tmp_ser;
+    uint32_t node_count, ser_len = 1; // for null-byte
     char *delim = CALLSTACK_STR_DELIM;
-    int ret, node_count = 0;
+    int ret;
 
     if (!callstack)
         goto fail;
@@ -35,9 +37,18 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
             goto fail;
         }
 
-        ser = realloc(ser, sizeof(char)*(ser_len+strlen(cur_node->lib)+1));
-        if (!ser)
+        tmp_ser = realloc(ser, ser_len+strlen(cur_node->lib)+1);
+        if (!tmp_ser)
             goto fail;
+
+	// UGH need to clear the very first allocation,
+	// so we don't accidentally start concatenating to
+	// junk that realloc spits out
+	if (ser_len == 1) {
+	  memset(tmp_ser, 0, ser_len+strlen(cur_node->lib)+1);
+	}
+
+	ser = tmp_ser;
 
         strncat(ser, cur_node->lib, strlen(cur_node->lib));
         strncat(ser, CALLSTACK_STR_DELIM, 1);
@@ -48,7 +59,7 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
 
     // now we need to pre-append the len so the kernel knows how many
     // nodes to expect to de-serialize
-    out = malloc(sizeof(char)*(ser_len+INT32_STR_SIZE));
+    out = malloc(strlen(ser)+INT32_STR_SIZE+2);
     if (!out)
         goto fail;
     ret = sprintf(out, "%d,%s", node_count, ser);
@@ -64,7 +75,7 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
 }
 
 static int read_policy_file(const char *policy_fname, char **buf) {
-    char * buffer = 0;
+    char *buffer = 0;
     int length;
     int read;
     FILE * f = fopen(policy_fname, "r");
@@ -73,7 +84,7 @@ static int read_policy_file(const char *policy_fname, char **buf) {
         fseek(f, 0, SEEK_END);
         length = ftell(f);
         fseek(f, 0, SEEK_SET);
-        buffer = malloc(length);
+        buffer = malloc(length+1);
         if (!buffer) {
             goto fail;
         }
@@ -82,8 +93,9 @@ static int read_policy_file(const char *policy_fname, char **buf) {
           printf("bad length: %d != %d\n", read, length);
           goto fail;
         }
-
+	buffer[length] = '\0';
         *buf = buffer;
+	fclose(f);
         return length;
     }
  fail:
@@ -100,9 +112,9 @@ static int read_policy_file(const char *policy_fname, char **buf) {
  */
 int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
 
-  int count, rule_len;
-    char *ser = NULL, *out;
-    uint32_t ser_len = 1; // for null-byte
+    int rule_len;
+    char *ser = NULL, *out, *tmp_ser;
+    uint32_t count = 0, ser_len = 1; // for null-byte
     int ret;
 
     char *policy;
@@ -110,31 +122,37 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
     if (ret < 0) {
         goto fail;
     }
-
+    
     // loop through the policy to serialize it into
     // a format that can be interpreted by the LSM
     char *next_rule = strsep(&policy, "\n");
     while(next_rule) {
-        if (*next_rule == 0) {
-           // our next rule is a null byte since we just parsed an empty line
-           goto skip;
-        }
-
-        rule_len = strlen(next_rule);
-        ser = realloc(ser, sizeof(char)*(ser_len+rule_len));
-        if (!ser) {
-            ret = -1;
-            goto fail;
-        }
-
-        strncat(ser, next_rule, rule_len);
-
-        ser_len += rule_len;
-        count++;
-    skip:
-        next_rule = strsep(&policy, "\n");
+        if (!strlen(next_rule)) {
+	  // this means we've hit an empty line, so skip to next rule
+	  next_rule = strsep(&policy, "\n");
+	  continue;
+	}
+      
+	rule_len = strlen(next_rule);
+	tmp_ser = realloc(ser, ser_len+rule_len);
+	if (!tmp_ser) {
+	  ret = -1;
+	  goto fail;
+	}
+	// UGH need to clear the very first allocation,
+	// so we don't accidentally start concatenating to
+	// junk that realloc spits out
+	if (ser_len == 1) {
+	  memset(tmp_ser, 0, ser_len+rule_len);
+	}
+	ser = tmp_ser;
+	
+	strncat(ser, next_rule, rule_len);
+	ser_len = strlen(ser)+rule_len;
+	count++;
+	next_rule = strsep(&policy, "\n");
     }
-
+    
     if (count == 0) {
       // this means our file is malformed
       // bc we don't have a single valid rule line
@@ -145,12 +163,12 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
 
     // now we need to pre-append the len so the kernel knows how many
     // nodes to expect to de-serialize
-    out = malloc(sizeof(char)*(ser_len+INT32_STR_SIZE));
+    out = malloc(strlen(ser)+INT32_STR_SIZE+2);
     if (!out) {
         ret = -1;
         goto fail;
     }
-
+    memset(out, 0, strlen(ser)+INT32_STR_SIZE+2);
     ret = sprintf(out, "%d,%s", count, ser);
     free(ser);
 
