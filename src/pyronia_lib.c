@@ -24,6 +24,7 @@
 #include "serialization.h"
 
 #define FAMILY_STR "SI_COMM"
+#define NUM_CS_REQ_MSGS 1
 
 static struct nl_sock *si_sock;
 static int nl_fam;
@@ -54,57 +55,64 @@ static int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
  * callstack back to the kernel.
  */
 static int handle_callstack_request(struct nl_msg *msg, void *arg) {
-    struct nlmsghdr *nl_hdr;
-    struct genlmsghdr *genl_hdr;
+    struct nlmsghdr *nl_hdr = NULL;
+    struct genlmsghdr *genl_hdr = NULL;
     struct nlattr *attrs[SI_COMM_A_MAX];
     uint8_t *reqp;
-    pyr_cg_node_t *callstack;
-    char *callstack_str;
-    int err;
-
+    pyr_cg_node_t *callstack = NULL;
+    char *callstack_str = NULL;
+    int err = -1;
+    int count = 0; //used to make sure we're getting the right number of messages
+    
     printf("[%s] The kernel module sent a message.\n", __func__);
 
     nl_hdr = nlmsg_hdr(msg);
     genl_hdr = genlmsg_hdr(nl_hdr);
-
+    
     if (genl_hdr->cmd != SI_COMM_C_STACK_REQ) {
       printf("[%s] Unsupported command %d\n", __func__, genl_hdr->cmd);
-        return 0;
+      goto out;
     }
-
+    
     err = genlmsg_parse(nl_hdr, 0, attrs, SI_COMM_A_MAX, si_comm_genl_policy);
     if (err)
-      return err;
-
+      goto out;
+    
+    printf("[%s] Received GENL SI_COMM msg\n", __func__);
+    
     // ignore any attributes other than the KERN_REQ
     if (attrs[SI_COMM_A_KERN_REQ]) {
-        reqp = (uint8_t *)nla_data(attrs[SI_COMM_A_KERN_REQ]);
-        if (*reqp != STACK_REQ_CMD) {
-          printf("[%s] Unexpected kernel message: %u\n", __func__, *reqp);
-            return -1;
-        }
+      reqp = (uint8_t *)nla_data(attrs[SI_COMM_A_KERN_REQ]);
+      if (*reqp != STACK_REQ_CMD) {
+	printf("[%s] Unexpected kernel message: %u\n", __func__, *reqp);
+	goto out;
+      }
     }
     else {
       printf("[%s] Null message from the kernel message\n", __func__);
-        return -1;
+      goto out;
     }
-
+    count++;
+    
     // Collect and serialize the callstack
     callstack = runtime->collect_callstack_cb();
     err = pyr_serialize_callstack(&callstack_str, callstack);
     if (err > 0) {
-        printf("[%s] Sending serialized callstack %s (%d bytes) to kernel\n", __func__, callstack_str, err);
+      printf("[%s] Sending serialized callstack %s (%d bytes) to kernel\n", __func__, callstack_str, err);
+      err = 0;
     }
 
-    err = pyr_to_kernel(SI_COMM_C_STACK_REQ, SI_COMM_A_USR_MSG, callstack_str);
-
  out:
+    if (err) 
+      err = pyr_to_kernel(SI_COMM_C_STACK_REQ, SI_COMM_A_USR_MSG, NULL);
+    else
+      err = pyr_to_kernel(SI_COMM_C_STACK_REQ, SI_COMM_A_USR_MSG, callstack_str);
+
     if (callstack)
         pyr_free_callgraph(&callstack);
     if (callstack_str)
         free(callstack_str);
     return err;
-
 }
 
 // this gets called in a separate receiver thread
@@ -113,7 +121,7 @@ static void *pyr_recv_from_kernel(void *args) {
   int err = 0;
 
   while(1) {
-    printf("[%s] Listening at port %d\n", __func__, si_port);
+    printf("[%s] Listening at port %d\n", __func__, nl_socket_get_local_port(si_sock));
     
     // Receive messages
     err = nl_recvmsgs_default(si_sock);
@@ -122,6 +130,8 @@ static void *pyr_recv_from_kernel(void *args) {
       break;
     }
   }
+
+  pyr_exit();
   return NULL;
 }
 
@@ -139,7 +149,7 @@ static int init_si_kernel_comm() {
     si_port = getpid();
     nl_socket_set_local_port(si_sock, si_port);
 
-    err = nl_socket_modify_cb(si_sock, NL_CB_VALID, NL_CB_CUSTOM,
+    err = nl_socket_modify_cb(si_sock, NL_CB_MSG_IN, NL_CB_CUSTOM,
                                 handle_callstack_request, NULL);
     if (err < 0) {
       printf("[%s] Could not register receive callback function. Error = %d\n", __func__, err);
@@ -243,6 +253,8 @@ int pyr_init(const char *lib_policy_file,
         goto out;
     }
 
+    printf("[%s] Sent registration message %s (%d bytes)\n", __func__, reg_str, strlen(reg_str));
+    
     /* Start the callstack request receiver thread */
     init_callstack_req_thread();
 
@@ -285,6 +297,7 @@ int pyr_new_cg_node(pyr_cg_node_t **cg_root, const char* lib,
     n->lib = malloc(strlen(lib)+1);
     if (!n->lib)
       goto fail;
+    memset(n->lib, 0, strlen(lib)+1);
     memcpy(n->lib, lib, strlen(lib));
     n->data_type = data_type;
     n->child = child;

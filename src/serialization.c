@@ -20,10 +20,10 @@
 // Caller must free the string.
 int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
     pyr_cg_node_t *cur_node;
-    char *ser = NULL, *out, *tmp_ser;
-    uint32_t node_count, ser_len = 1; // for null-byte
+    char *ser = NULL, *out = NULL, *tmp_ser = NULL;
+    uint32_t node_count = 0, ser_len = 1; // for null-byte
     char *delim = CALLSTACK_STR_DELIM;
-    int ret;
+    int ret = -1;
 
     if (!callstack)
         goto fail;
@@ -62,6 +62,7 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
     out = malloc(strlen(ser)+INT32_STR_SIZE+2);
     if (!out)
         goto fail;
+    memset(out, 0, strlen(ser)+INT32_STR_SIZE+2);
     ret = sprintf(out, "%d,%s", node_count, ser);
     free(ser);
 
@@ -113,7 +114,7 @@ static int read_policy_file(const char *policy_fname, char **buf) {
 int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
 
     int rule_len;
-    char *ser = NULL, *out, *tmp_ser;
+    char *ser = NULL, *out = NULL, *tmp_ser = NULL;
     uint32_t count = 0, ser_len = 1; // for null-byte
     int ret;
 
