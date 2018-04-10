@@ -1,0 +1,13 @@
+d /etc/ld.so.cache,
+d /lib/x86_64-linux-gnu/libc-2.23.so,
+d /lib/x86_64-linux-gnu/libpyronia.so,
+d /lib/x86_64-linux-gnu/libsmv.so,
+d /lib/x86_64-linux-gnu/libpthread-2.23.so,
+d /lib/x86_64-linux-gnu/libnl-genl-3.so.200.22.0,
+d /lib/x86_64-linux-gnu/libnl-3.so.200.22.0,
+d /lib/x86_64-linux-gnu/libm-2.23.so,
+d /proc/*/net/psched,
+d /dev/pts/*,
+
+http network 127.0.0.1,
+http /tmp/cam3,

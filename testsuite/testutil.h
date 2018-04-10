@@ -190,8 +190,6 @@ static int test_connect_fail() {
         goto out;
     }
 
-    printf("\n");
-
  out:
     freeaddrinfo(servinfo); // all done with this structure
     return error;

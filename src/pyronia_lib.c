@@ -131,6 +131,7 @@ static void *pyr_recv_from_kernel(void *args) {
     }
   }
 
+  printf("[%s] Got here!!!!\n", __func__);
   pyr_exit();
   return NULL;
 }
@@ -253,7 +254,7 @@ int pyr_init(const char *lib_policy_file,
         goto out;
     }
 
-    printf("[%s] Sent registration message %s (%d bytes)\n", __func__, reg_str, strlen(reg_str));
+    printf("[%s] Sent registration message %s (%lu bytes)\n", __func__, reg_str, strlen(reg_str));
     
     /* Start the callstack request receiver thread */
     init_callstack_req_thread();

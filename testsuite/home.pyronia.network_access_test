@@ -1,0 +1,17 @@
+/home/pyronia/network_access_test {
+# these need to be included by default
+/etc/ld.so.cache r,
+/lib/x86_64-linux-gnu/libc-2.23.so rm,
+/lib/x86_64-linux-gnu/libpyronia.so rm,
+/lib/x86_64-linux-gnu/libsmv.so rm,
+/lib/x86_64-linux-gnu/libpthread-2.23.so rm,
+/lib/x86_64-linux-gnu/libnl-genl-3.so.200.22.0 rm,
+/lib/x86_64-linux-gnu/libnl-3.so.200.22.0 rm,
+/lib/x86_64-linux-gnu/libm-2.23.so rm,
+/proc/*/net/psched r,
+/dev/pts/* r,
+/home/pyronia/libpyronia/testsuite/home.pyronia.network_access_test-lib.prof r,
+
+network inet,
+/tmp/cam3 r,
+}
