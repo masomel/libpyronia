@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SRCDIR=$HOME/libpyronia/testsuite
+SRCDIR=../testsuite
 
 gcc -g $SRCDIR/kernel_upcall_test.c -o $HOME/kernel_upcall_test -lpyronia -lsmv
 gcc -g $SRCDIR/file_access_test.c -o $HOME/file_access_test -lpyronia -lsmv

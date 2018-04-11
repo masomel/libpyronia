@@ -55,6 +55,8 @@ int main (int argc, char *argv[]) {
     goto out;
   }
 
+  pyr_callstack_req_listen();
+  
   printf("---Testing hidden network connection open\n");
   
   test_type = 0;

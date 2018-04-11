@@ -20,8 +20,8 @@ static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
     if (c->next != NULL)
         pyr_native_lib_context_free(&c->next);
 
-    if (c->module_name)
-        memdom_free(c->module_name);
+    if (c->library_name)
+        memdom_free(c->library_name);
     if (c->memdom_id > 0)
         memdom_kill(c->memdom_id);
     memdom_free(c);
@@ -63,17 +63,37 @@ int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
 }
 
 int pyr_security_context_alloc(struct pyr_security_context **ctxp,
-                               int memdom_id) {
+			       pyr_cg_node_t *(*collect_callstack_cb)(void)) {
     int err = 0;
     struct pyr_security_context *c = NULL;
+    int interp_memdom = -1;
 
-    c = memdom_alloc(memdom_id, sizeof(struct pyr_security_context));
-    if (!c)
-        return -ENOMEM;
+    // create the memdom first so this struct
+    // can also be allocated in interp_dom
+    if ((interp_memdom = memdom_create()) == -1) {
+        goto fail;
+    }
 
-    // memdom is created by the main library so this struct
-    // can be allocated in interp_dom
-    c->interp_dom = memdom_id;
+    // don't forget to add the main thread to this memdom
+    smv_join_domain(interp_memdom, MAIN_THREAD);
+    memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+
+    // we want this to be allocated in the interpreter memdom
+    c = memdom_alloc(interp_memdom, sizeof(struct pyr_security_context));
+    if (!c) {
+        printf("[%s] No memory for runtime security context\n", __func__);
+        err = -ENOMEM;
+        goto fail;
+    }
+
+    c->interp_dom = interp_memdom;
+    
+    if (!collect_callstack_cb) {
+        printf("[%s] Need non-null callstack collect callback\n", __func__);
+        err = -EINVAL;
+        goto fail;
+    }
+    c->collect_callstack_cb = collect_callstack_cb;
 
     // this list will be added to whenever a new non-builtin extenion
     // is loaded via dlopen
@@ -93,7 +113,7 @@ int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib) {
 
     while (runner != NULL) {
         if (!strncmp(runner->library_name, lib, strlen(lib))) {
-            printf("[%s] Found memdom %d\n");
+	    printf("[%s] Found memdom %d\n", __func__, runner->memdom_id);
             return runner->memdom_id;
         }
     }

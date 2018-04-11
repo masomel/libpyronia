@@ -36,6 +36,8 @@ int main (int argc, char *argv[]) {
     goto out;
   }
 
+  pyr_callstack_req_listen();
+  
   ret = test_file_open_name("/tmp/cam0");
   if (ret)
     goto out;

@@ -13,7 +13,7 @@ static int test_type = 0;
 
 // return a different callgraph depending on which test we're
 // about to run
-pyr_cg_node_t *test_callgraph_creation() {
+static pyr_cg_node_t *test_callgraph_creation() {
     pyr_cg_node_t *child = NULL;
     int i, err;
     int len = 3;
@@ -55,6 +55,8 @@ int main (int argc, char *argv[]) {
     printf("Error initializing Pyronia: %d\n", ret);
     goto out;
   }
+
+  pyr_callstack_req_listen();
 
   printf("---Testing authorized file open\n");
   

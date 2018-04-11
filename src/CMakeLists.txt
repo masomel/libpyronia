@@ -18,7 +18,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC -g ${LIBNL3_CFLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC -g ${LIBNL3_CFLAGS}")
 #set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-add_library(pyronia SHARED serialization.c pyronia_lib.c)
+add_library(pyronia SHARED security_context.c serialization.c si_comm.c pyronia_lib.c)
 
 target_link_libraries(pyronia ${LIBNL3_LIBRARIES} smv pthread) 
 

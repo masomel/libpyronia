@@ -9,7 +9,6 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
-#include <pthread.h>
 #include <kernel_comm.h>
 #include <netlink/netlink.h>
 #include <netlink/msg.h>
@@ -17,14 +16,15 @@
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
 #include <linux/pyronia_netlink.h>
+#include <memdom_lib.h>
 
+#include "pyronia_lib.h"
 #include "si_comm.h"
 #include "serialization.h"
 
 static struct nl_sock *si_sock = NULL;
 static int nl_fam = 0;
 static uint32_t si_port = 0;
-static pthread_t recv_th;
 
 /* libpyronia-specific wrapper around send_message in kernel_comm.h */
 static int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
@@ -44,7 +44,7 @@ static int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
 
 // this gets called in a separate receiver thread
 // so just make the function signature fit what pthread_create expects
-static void *pyr_recv_from_kernel(void *args) {
+void *pyr_recv_from_kernel(void *args) {
   int err = 0;
 
   while(1) {
@@ -102,7 +102,7 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
     }
 
     // Collect and serialize the callstack
-    callstack = pyr_runtime_collect_callstack();
+    callstack = pyr_collect_runtime_callstack();
     err = pyr_serialize_callstack(&callstack_str, callstack);
     if (err > 0) {
         printf("[%s] Sending serialized callstack %s (%d bytes) to kernel\n", __func__, callstack_str, err);
@@ -114,7 +114,7 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
     if (callstack)
         pyr_free_callgraph(&callstack);
     if (callstack_str)
-        free(callstack_str);
+        memdom_free(callstack_str);
     return err;
 
 }
@@ -134,7 +134,7 @@ static int init_si_socket() {
     nl_socket_set_local_port(si_sock, si_port);
 
     err = nl_socket_modify_cb(si_sock, NL_CB_VALID, NL_CB_CUSTOM,
-                                handle_callstack_request, NULL);
+                                pyr_handle_callstack_request, NULL);
     if (err < 0) {
       printf("[%s] Could not register receive callback function. Error = %d\n", __func__, err);
         goto fail;
@@ -160,8 +160,7 @@ static int init_si_socket() {
 /* Open the netlink socket to communicate with the
  * kernel, and register this process as a Pyronia-secured process
  * with the given serialized library policy. */
-int pyr_init_si_comm(pyr_cg_node_t *(*collect_callstack_cb)(void),
-                     char *policy) {
+int pyr_init_si_comm(char *policy) {
     int err = 0;
     char *reg_str = NULL;
 
@@ -172,7 +171,7 @@ int pyr_init_si_comm(pyr_cg_node_t *(*collect_callstack_cb)(void),
       goto out;
     }
 
-    reg_str = malloc(INT32_STR_SIZE+strlen(policy)+2);
+    reg_str = pyr_alloc_critical_runtime_state(INT32_STR_SIZE+strlen(policy)+2);
     if (!reg_str) {
         goto out;
     }
@@ -185,20 +184,11 @@ int pyr_init_si_comm(pyr_cg_node_t *(*collect_callstack_cb)(void),
 
  out:
     if (reg_str)
-        free(reg_str);
+        memdom_free(reg_str);
     if (!err)
         printf("[%s] Registered process at port %d; SI_COMM family id = %d\n",
            __func__, si_port, nl_fam);
     return err;
-}
-
-void pyr_callstack_req_listen() {
-    pthread_attr_t attr = NULL;
-
-    pthread_attr_init(&attr);
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
-    pthread_create(&recv_th, &attr, pyr_recv_from_kernel, NULL);
 }
 
 void pyr_teardown_si_comm() {

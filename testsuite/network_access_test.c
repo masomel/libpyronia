@@ -36,6 +36,8 @@ int main (int argc, char *argv[]) {
     goto out;
   }
 
+  pyr_callstack_req_listen();
+  
   for (i = 0; i < NUM_ITERS; i++) {
     ret = test_connect();
     if (ret)

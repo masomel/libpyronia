@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <pthread.h>
 #include <sys/syscall.h>
 #include <linux/pyronia_mac.h>
 #include <smv_lib.h>
@@ -20,61 +21,7 @@
 #include "si_comm.h"
 #include "util.h"
 
-static struct pyr_runtime *runtime;
-
-static void free_runtime(struct pyr_runtime **rtp) {
-    struct pyr_runtime *r = *rtp;
-
-    if (!r)
-        return;
-
-    pyr_security_context_free(&r->security_context);
-    r->collect_callstack_cb = NULL;
-    memdom_free(r);
-    *rtp = NULL;
-}
-
-static int init_runtime(pyr_cg_node_t *(*collect_callstack)(void)) {
-    struct pyr_runtime *r = NULL;
-    int err = 0;
-    int interp_memdom = -1;
-
-    if ((interp_memdom = memdom_create()) == -1) {
-        goto fail;
-    }
-
-    // don't forget to add the main thread to this memdom
-    smv_join_domain(interp_memdom, MAIN_THREAD);
-    memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-
-    // we want this to be allocated this in the interpreter memdom
-    r = memdom_alloc(interp_memdom, sizeof(struct pyr_runtime));
-    if (!r) {
-        printf("[%s] No memory for runtime properties\n", __func__);
-        err = -ENOMEM;
-        goto fail;
-    }
-
-    err = pyr_security_context_alloc(&r->security_context, interp_memdom);
-    if (err)
-        goto fail;
-
-    if (!collect_callstack) {
-        printf("[%s] Need non-null callstack collect callback\n", __func__);
-        err = -EINVAL;
-        goto fail;
-    }
-    r->collect_callstack_cb = collect_callstack;
-
-    runtime = r;
-
-    printf("[%s] Successfully initialized the runtime\n", __func__);
-    return 0;
- fail:
-    free_runtime(&r);
-    runtime = NULL;
-    return err;
-}
+static struct pyr_security_context *runtime;
 
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
@@ -95,8 +42,8 @@ int pyr_init(const char *lib_policy_file,
         goto out;
     }
 
-    /* Initialize the runtime metadata */
-    err = init_runtime(collect_callstack_cb);
+    /* Initialize the runtime's security context */
+    err = pyr_security_context_alloc(&runtime, collect_callstack_cb);
     if (err) {
         printf("[%s] Runtime initialization failure\n", __func__);
         goto out;
@@ -161,7 +108,7 @@ void pyr_revoke_critical_state_write() {
 
     printf("[%s]\n", __func__);
 
-    memdom_priv_delete(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
+    memdom_priv_del(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
 }
 
 /** Loads the given native library into its own memory domain.
@@ -179,6 +126,32 @@ int pyr_run_native_func_isolated(const char *lib, void *(*func)(void)) {
     return 0;
 }
 
+/** Starts the SI listener and dispatch thread.
+ */
+void pyr_callstack_req_listen() {
+    pthread_attr_t attr;
+    int smv_id = -1;
+    pthread_t recv_th;
+    
+    pthread_attr_init(&attr);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+
+    smv_id = smv_create();
+    if (smv_id == -1) {
+      printf("[%s] Could not create and SMV for the SI thread\n", __func__);
+      return;
+    }
+
+    // we trust this thread, but also, we need this thread to be able
+    // to access the functions
+    smv_join_domain(MAIN_THREAD, smv_id);
+    memdom_priv_add(MAIN_THREAD, smv_id, MEMDOM_READ | MEMDOM_WRITE);
+    smv_join_domain(runtime->interp_dom, smv_id);
+    memdom_priv_add(runtime->interp_dom, smv_id, MEMDOM_READ | MEMDOM_WRITE);
+    
+    smvthread_create_attr(smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
+}
+
 /* Do all necessary teardown actions. */
 void pyr_exit() {
     int interp_dom = runtime->interp_dom;
@@ -186,14 +159,14 @@ void pyr_exit() {
     printf("[%s] Exiting Pyronia runtime\n", __func__);
 
     pyr_teardown_si_comm();
-    free_runtime(&runtime);
+    pyr_security_context_free(&runtime);
     smv_leave_domain(interp_dom, MAIN_THREAD);
 }
 
 /** Wrapper around the runtime callstack collection callback
  * to be called by the si_comm component in handle_callstack_request.
  */
-pyr_cg_node_t *pyr_runtime_collect_callstack() {
+pyr_cg_node_t *pyr_collect_runtime_callstack() {
     return runtime->collect_callstack_cb();
 }
 
