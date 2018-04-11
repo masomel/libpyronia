@@ -1,6 +1,6 @@
-/** Contains the Pyronia security context library used in Pyronia-aware
- * language runtimes to isolate security-critical runtime state and
- * native libraries into memory domains.
+/** Implements the Pyronia security context library used for
+ * isolating security-critical runtime state and native libraries
+ * into memory domains in Pyronia-aware language runtimes.
  *
  *@author Marcela S. Melara
  */
@@ -9,46 +9,71 @@
 #include <memdom_lib.h>
 
 #include "security_context.h"
+#include "util.h"
 
-int pyr_native_lib_context_alloc(pyr_native_ctx_t **ctxp, void *mod,
-                                 pyr_native_ctx_t *next) {
-    int err;
-    pyr_native_ctx_t *c;
+static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
+    pyr_native_ctx_t *c = *ctxp;
 
-    c = malloc(sizeof(pyr_native_ctx_t));
+    if (!c)
+        return;
+
+    if (c->next != NULL)
+        pyr_native_lib_context_free(&c->next);
+
+    if (c->module_name)
+        memdom_free(c->module_name);
+    if (c->memdom_id > 0)
+        memdom_kill(c->memdom_id);
+    memdom_free(c);
+    *ctxp = NULL;
+}
+
+/* This functions allocates a new native library context.
+ * A new memory domain is created as part of this process
+ * so the native library can loaded into the memory domain
+ * on dynload time.
+ * Note: This function must be called BEFORE the native module
+ * is loaded */
+int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
+                               pyr_native_ctx_t *next) {
+    int err = -1;
+    pyr_native_ctx_t *c = NULL;
+
+    c = pyr_alloc_critical_runtime_state(sizeof(pyr_native_ctx_t));
     if (!c)
         return -ENOMEM;
 
-    c->native_dom = memdom_create();
-    if (c->native_dom == -1) {
+    if (set_str(lib, &c->library_name))
+        goto fail;
+
+    c->memdom_id = memdom_create();
+    if (c->memdom_id == -1) {
         err = -EINVAL;
         goto fail;
     }
 
-    c->native_module = mod;
     c->next = next;
 
     *ctxp = c;
     return 0;
  fail:
-    if (c)
-        free(c);
+    pyr_native_lib_context_free(&c);
+    *ctxp = NULL;
     return err;
 }
 
-int pyr_security_context_alloc(struct pyr_security_context **ctxp) {
-    int err;
-    struct pyr_security_context *c;
+int pyr_security_context_alloc(struct pyr_security_context **ctxp,
+                               int memdom_id) {
+    int err = 0;
+    struct pyr_security_context *c = NULL;
 
-    c = malloc(sizeof(struct pyr_security_context));
+    c = memdom_alloc(memdom_id, sizeof(struct pyr_security_context));
     if (!c)
         return -ENOMEM;
 
-    c->interp_dom = memdom_create();
-    if (c->interp_dom == -1) {
-        err = -EINVAL;
-        goto fail;
-    }
+    // memdom is created by the main library so this struct
+    // can be allocated in interp_dom
+    c->interp_dom = memdom_id;
 
     // this list will be added to whenever a new non-builtin extenion
     // is loaded via dlopen
@@ -58,14 +83,34 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp) {
     return 0;
  fail:
     if (c)
-        free(c);
+        memdom_free(c);
+    *ctxp = NULL;
     return err;
 }
 
-void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
+int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib) {
+    pyr_native_ctx_t *runner = start;
 
+    while (runner != NULL) {
+        if (!strncmp(runner->library_name, lib, strlen(lib))) {
+            printf("[%s] Found memdom %d\n");
+            return runner->memdom_id;
+        }
+    }
+    return -1;
 }
 
 void pyr_security_context_free(struct pyr_security_context **ctxp) {
+    struct pyr_security_context *c = *ctxp;
 
+    if (!c)
+        return;
+
+    pyr_native_lib_context_free(&c->native_libs);
+
+    if (c->interp_dom > 0)
+        memdom_kill(c->interp_dom);
+
+    memdom_free(c);
+    *ctxp = NULL;
 }

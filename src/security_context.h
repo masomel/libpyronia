@@ -9,8 +9,8 @@
 #define __PYR_SEC_CTX_H
 
 struct pyr_native_lib_context {
-    int native_dom; // the memdom this native module belongs to
-    void *native_module; // a pointer to the native module
+    char *library_name; // runtimes also identify libraries by string name
+    int memdom_id; // the memdom this native library belongs to
     // points to the next native lib context in the linked list
     struct pyr_native_lib_context *next;
 };
@@ -26,10 +26,11 @@ struct pyr_security_context {
 extern "C" {
 #endif
 
-    int pyr_native_lib_context_alloc(pyr_native_ctx_t **ctxp, void *mod,
-                                     pyr_native_ctx_t *next);
-    int pyr_security_context_alloc(struct pyr_security_context **ctxp);
-    void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp);
+    int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
+                                   pyr_native_ctx_t *next);
+    int pyr_security_context_alloc(struct pyr_security_context **ctxp,
+                                   int memdom_id);
+    int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib);
     void pyr_security_context_free(struct pyr_security_context **ctxp);
 
 #ifdef __cplusplus

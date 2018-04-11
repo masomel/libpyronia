@@ -9,6 +9,8 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "pyronia_lib.h"
+
 /**
  * set_str - copy the src string into the dest string
  * in a clean buffer. This is used to cleanly set the
@@ -23,7 +25,7 @@ static inline int set_str(const char *src, char **dest) {
   if (*dest)
     return 0;
 
-  str = malloc(strlen(src)+1);
+  str = pyr_alloc_critical_runtime_state(strlen(src)+1);
   if (!str) {
     err = -1;
     goto out;
