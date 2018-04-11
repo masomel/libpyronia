@@ -1,0 +1,17 @@
+#!/bin/bash
+
+SRCDIR=$HOME/libpyronia/testsuite
+
+gcc -g $SRCDIR/kernel_upcall_test.c -o $HOME/kernel_upcall_test -lpyronia -lsmv
+gcc -g $SRCDIR/file_access_test.c -o $HOME/file_access_test -lpyronia -lsmv
+gcc -g $SRCDIR/network_access_test.c -o $HOME/network_access_test -lpyronia -lsmv
+gcc -g $SRCDIR/callgraph_perms_fail_test.c -o $HOME/callgraph_perms_fail_test -lpyronia -lsmv
+
+cd $HOME
+
+echo "*** Running End-to-End Pyronia Tests***"
+
+./kernel_upcall_test
+./file_access_test
+./network_access_test
+./callgraph_perms_fail_test
