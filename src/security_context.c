@@ -71,7 +71,8 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     // create the memdom first so this struct
     // can also be allocated in interp_dom
     if ((interp_memdom = memdom_create()) == -1) {
-        goto fail;
+      printf("[%s] Could not create interpreter dom\n", __func__);
+      goto fail;
     }
 
     // don't forget to add the main thread to this memdom

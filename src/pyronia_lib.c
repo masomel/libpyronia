@@ -52,7 +52,7 @@ int pyr_init(const char *lib_policy_file,
     /* Parse the library policy from disk */
     err = pyr_parse_lib_policy(lib_policy_file, &policy);
     if (err < 0) {
-        printf("[%s] Parsing lib policy failure\n", __func__);
+      printf("[%s] Parsing lib policy failure: %d\n", __func__, err);
         goto out;
     }
 
@@ -63,6 +63,8 @@ int pyr_init(const char *lib_policy_file,
         printf("[%s] SI comm channel initialization failed\n", __func__);
         goto out;
     }
+
+    pyr_callstack_req_listen();
 
  out:
     if (policy)

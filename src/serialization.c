@@ -89,17 +89,21 @@ static int read_policy_file(const char *policy_fname, char **buf) {
         fseek(f, 0, SEEK_SET);
         buffer = pyr_alloc_critical_runtime_state(length+1);
         if (!buffer) {
+	  printf("[%s] Could not allocate the protected buffer\n", __func__);
             goto fail;
         }
         read = fread(buffer, 1, length, f);
         if (read != length) {
-          printf("bad length: %d != %d\n", read, length);
+          printf("[%s] Bad read length: %d != %d\n", __func__, read, length);
           goto fail;
         }
 	buffer[length] = '\0';
         *buf = buffer;
 	fclose(f);
         return length;
+    }
+    else {
+        printf("[%s] Could not open the lib policy file %s\n", __func__, policy_fname);
     }
  fail:
     if (buffer)
