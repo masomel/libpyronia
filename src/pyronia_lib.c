@@ -161,8 +161,10 @@ void pyr_exit() {
     printf("[%s] Exiting Pyronia runtime\n", __func__);
 
     pyr_teardown_si_comm();
+    pyr_grant_critical_state_write();
     pyr_security_context_free(&runtime);
-    smv_leave_domain(interp_dom, MAIN_THREAD);
+    memdom_kill(interp_dom);
+    pyr_revoke_critical_state_write();
 }
 
 /** Wrapper around the runtime callstack collection callback

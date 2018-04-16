@@ -13,7 +13,8 @@
 
 static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
     pyr_native_ctx_t *c = *ctxp;
-
+    int memdom_id = -1;
+    
     if (!c)
         return;
 
@@ -24,9 +25,11 @@ static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
     
     if (c->library_name)
         memdom_free(c->library_name);
-    if (c->memdom_id > 0)
-        memdom_kill(c->memdom_id);
-    memdom_free(c);
+    if (c->memdom_id > 0) {
+        memdom_id = c->memdom_id;
+	memdom_free(c);
+	memdom_kill(memdom_id);
+    }
     *ctxp = NULL;
 }
 
@@ -125,6 +128,7 @@ int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib) {
 
 void pyr_security_context_free(struct pyr_security_context **ctxp) {
     struct pyr_security_context *c = *ctxp;
+    int memdom_id = -1;
     
     if (!c)
         return;
@@ -133,9 +137,8 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
     
     pyr_native_lib_context_free(&c->native_libs);
 
-    if (c->interp_dom > 0)
-        memdom_kill(c->interp_dom);
-
+    printf("[%s] Freed all native libs\n", __func__);
+    
     memdom_free(c);
     *ctxp = NULL;
 }
