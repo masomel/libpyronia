@@ -20,6 +20,8 @@ static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
     if (c->next != NULL)
         pyr_native_lib_context_free(&c->next);
 
+    printf("[%s] Native context for lib %s\n", __func__, c->library_name);
+    
     if (c->library_name)
         memdom_free(c->library_name);
     if (c->memdom_id > 0)
@@ -123,10 +125,12 @@ int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib) {
 
 void pyr_security_context_free(struct pyr_security_context **ctxp) {
     struct pyr_security_context *c = *ctxp;
-
+    
     if (!c)
         return;
 
+    printf("[%s] Freeing security context %p\n", __func__, c);
+    
     pyr_native_lib_context_free(&c->native_libs);
 
     if (c->interp_dom > 0)

@@ -192,6 +192,8 @@ int pyr_init_si_comm(char *policy) {
 }
 
 void pyr_teardown_si_comm() {
-    if (si_sock)
+    if (si_sock) {
+        printf("[%s] Closing the SI socket\n", __func__);
         nl_socket_free(si_sock);
+    }
 }
