@@ -3,7 +3,6 @@
 
 #include <stdlib.h>
 #include <stdio.h>
-#include <stdbool.h>
 #include <pthread.h>
 #include "smv_lib.h"
 #include "kernel_comm.h"

@@ -85,6 +85,16 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
     return memdom_alloc(runtime->interp_dom, size);
 }
 
+/** Wrapper around memdom_query_id. Returns 1 if the
+ * given pointer is in the interpreter_dom, 0 otherwise.
+ */
+int pyr_is_critical_state(void *op) {
+  if (!runtime)
+    return 0;
+  
+  return memdom_query_id(op) == runtime->interp_dom;
+}
+
 /** Grants the main thread write access to the interpreter domain.
  */
 void pyr_grant_critical_state_write() {
@@ -94,9 +104,15 @@ void pyr_grant_critical_state_write() {
         return;
     }
 
-    printf("[%s]\n", __func__);
-
-    memdom_priv_add(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
+    // slight optimization: if we've already granted access
+    // let's avoid another downcall to change the memdom privileges
+    // and simply keep track of how many times we've granted access
+    if (runtime->nested_grants == 0) {
+      printf("[%s]\n", __func__);
+      memdom_priv_add(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
+    }
+      
+    runtime->nested_grants++;
 }
 
 /** Revokes the main thread's write privileges to the interpreter domain.
@@ -108,9 +124,13 @@ void pyr_revoke_critical_state_write() {
         return;
     }
 
-    printf("[%s]\n", __func__);
+    runtime->nested_grants--;
 
-    memdom_priv_del(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
+    // same optimization as above
+    if (runtime->nested_grants == 0) {
+      printf("[%s]\n", __func__);
+      memdom_priv_del(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
+    }
 }
 
 /** Loads the given native library into its own memory domain.

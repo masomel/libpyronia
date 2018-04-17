@@ -26,7 +26,12 @@ typedef struct pyr_cg_node pyr_cg_node_t;
 struct pyr_security_context {
     int interp_dom;
     pyr_native_ctx_t *native_libs;
-
+    /* The runtime may grant write access to the critical state
+     * in a function that calls another function that grants access
+     * itself. To make sure we don't revoke access to the outer
+     * functions, let's basically keep a reference count. */
+    uint32_t nested_grants;
+  
     /* The function used to collect a language runtime-specific
      * callstack. This callback needs to be set at initialization time. */
     pyr_cg_node_t *(*collect_callstack_cb)(void);

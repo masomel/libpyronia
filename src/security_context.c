@@ -93,6 +93,8 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     }
 
     c->interp_dom = interp_memdom;
+    // this ensures that we really do revoke write access at the end of pyr_init
+    c->nested_grants = 1; 
     
     if (!collect_callstack_cb) {
         printf("[%s] Need non-null callstack collect callback\n", __func__);
