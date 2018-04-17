@@ -403,12 +403,10 @@ out:
     else{
         /* Record allocated memory in the block header for free to use later */
         struct block_header_struct header;
-        header.addr = (void*)memblock;
-        header.memdom_id = memdom_id;
         header.size = sz;
         memcpy(memblock, &header, sizeof(struct block_header_struct));
         memblock = memblock + sizeof(struct block_header_struct);
-        rlog("[%s] header: addr %p, allocated 0x%lx bytes and returning data addr %p\n", __func__, header.addr, sz, memblock);
+        rlog("[%s] header: addr %p, allocated 0x%lx bytes and returning data addr %p\n", __func__, memblock-sizeof(struct block_header_struct), sz, memblock);
     }
 
     pthread_mutex_unlock(&memdom[memdom_id]->mlock);
@@ -421,15 +419,22 @@ void memdom_free(void* data){
     char *memblock = NULL;
     int memdom_id = -1;
 
+    /* Let's figure out first if this data even is allocated in
+     * a memdom. */
+    memdom_id = memdom_query_id(data);
+    if (memdom_id == -1) {
+        rlog("[%s] Attempted to free non-memdom data %p\n", __func__, data);
+        return;
+    }
+
     /* Read the header stored ahead of the actual data */
     memblock = (char*) data - sizeof(struct block_header_struct);
     memcpy(&header, memblock, sizeof(struct block_header_struct));
-    memdom_id = header.memdom_id;
 
     pthread_mutex_lock(&memdom[memdom_id]->mlock);
 
     /* Free the memory */
-    rlog("[%s] block header addr: %p, freeing 0x%lx bytes in memdom %d\n", __func__, header.addr, header.size, header.memdom_id);
+    rlog("[%s] block header addr: %p, freeing 0x%lx bytes in memdom %d\n", __func__, data, header.size, memdom_id);
     memset(memblock, 0, header.size);
 
     /* Create a new free list node */
@@ -445,7 +450,7 @@ void memdom_free(void* data){
     free_list->next = NULL;
 
     /* Insert the block into free list head */
-    free_list_insert_to_head(header.memdom_id, free_list);
+    free_list_insert_to_head(memdom_id, free_list);
 
     pthread_mutex_unlock(&memdom[memdom_id]->mlock);
 }

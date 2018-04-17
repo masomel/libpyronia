@@ -46,8 +46,6 @@ struct free_list_struct {
  * metadata for the allocator to free memory
  */
 struct block_header_struct {
-    void *addr;
-    int memdom_id;
     unsigned long size;
 };
 
