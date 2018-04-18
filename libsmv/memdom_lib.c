@@ -190,7 +190,7 @@ int memdom_query_id(void *obj){
         rlog("kernel responded error\n");
         return -1;
     }
-    rlog("obj in memdom %d\n", rv);
+    //rlog("obj in memdom %d\n", rv);
     return rv;
 }
 
@@ -390,10 +390,24 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
             }
             goto out;
         }
-
-        /* Move pointer forward */
-        prev = free_list;
-        free_list = free_list->next;
+	else {
+	  // we can try to merge this free list with the previous one
+	  if (prev) {
+	    // if we get here, we likely have another small
+	    // free list before us, so let's merge them
+	    prev->size += free_list->size;
+	    prev->next = free_list->next;
+	    rlog("[%s] Merge free lists to addr %p with list addr %p, sz 0x%lx\n",
+		 __func__, free_list->addr, prev->addr, prev->size);
+	    free(free_list);
+	    free_list = prev;
+	  }
+	  else {
+	    /* Move pointer forward */
+	    prev = free_list;
+	    free_list = free_list->next;
+	  }
+	}
     }
 
 out:
