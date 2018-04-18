@@ -16,9 +16,8 @@
 /* MMAP flag for memdom protected area */
 #define MAP_MEMDOM      0x00800000
 
-/* Maximum heap size a memdom can use: 1GB */
-//#define MEMDOM_HEAP_SIZE 0x40000000
-#define MEMDOM_HEAP_SIZE 0x1000
+/* Maximum heap size a memdom can use */
+#define MEMDOM_HEAP_SIZE 0x4000 // 16K
 
 /* Maximum number of memdoms a thread can have: 1024*/
 #define MAX_MEMDOM 1024
