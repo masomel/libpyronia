@@ -18,6 +18,7 @@ extern "C" {
     int pyr_init(const char *lib_policy_file,
                  pyr_cg_node_t *(*collect_callstack_cb)(void));
     void *pyr_alloc_critical_runtime_state(size_t size);
+    void pyr_free_isolated_state(void *op);
     int pyr_is_critical_state(void *op);
     void pyr_grant_critical_state_write(void);
     void pyr_revoke_critical_state_write(void);

@@ -85,6 +85,16 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
     return memdom_alloc(runtime->interp_dom, size);
 }
 
+/** Wrapper around memdom_free in any memdom.
+ */
+void pyr_free_isolated_state(void *op) {
+  int memdom_id = -1;
+  memdom_id = memdom_query_id(op);
+  if (memdom_id > 0) {
+    memdom_free(op);
+  }
+}
+
 /** Wrapper around memdom_query_id. Returns 1 if the
  * given pointer is in the interpreter_dom, 0 otherwise.
  */
@@ -108,7 +118,6 @@ void pyr_grant_critical_state_write() {
     // let's avoid another downcall to change the memdom privileges
     // and simply keep track of how many times we've granted access
     if (runtime->nested_grants == 0) {
-      printf("[%s]\n", __func__);
       memdom_priv_add(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
     }
       
@@ -128,7 +137,6 @@ void pyr_revoke_critical_state_write() {
 
     // same optimization as above
     if (runtime->nested_grants == 0) {
-      printf("[%s]\n", __func__);
       memdom_priv_del(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
     }
 }
