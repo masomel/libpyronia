@@ -41,11 +41,14 @@ struct free_list_struct {
     struct free_list_struct *next;
 };
 
-/* Every allocated chunk of memory has this block header to record the required
- * metadata for the allocator to free memory
+/* The allocator keeps this metadata structure for every allocated chunk of 
+ * memdom-protected memory. memdom_free removes this struct and inserts a
+ * corresponding free_list.
  */
-struct block_header_struct {
+struct alloc_record {
+    void *addr;
     unsigned long size;
+    struct alloc_record *next;
 };
 
 /* Memory domain metadata structure
@@ -60,6 +63,7 @@ struct memdom_metadata_struct {
     unsigned long total_size; // the total memory size of this memdom
     struct free_list_struct *free_list_head;
     struct free_list_struct *free_list_tail;
+    struct alloc_record *alloc_list;
     pthread_mutex_t mlock;  // protects this memdom in sn SMP environment
 };
 extern struct memdom_metadata_struct *memdom[MAX_MEMDOM];

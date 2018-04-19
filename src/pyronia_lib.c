@@ -86,13 +86,20 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 }
 
 /** Wrapper around memdom_free in any memdom.
+ * Returns 1 if the state was freed, 0 otherwise.
  */
-void pyr_free_isolated_state(void *op) {
+int pyr_free_isolated_state(void *op) {
   int memdom_id = -1;
   memdom_id = memdom_query_id(op);
   if (memdom_id > 0) {
+    if (runtime && memdom_id == runtime->interp_dom)
+      pyr_grant_critical_state_write();
     memdom_free(op);
+    if (runtime && memdom_id == runtime->interp_dom)
+      pyr_revoke_critical_state_write();
+    return 1;
   }
+  return 0;
 }
 
 /** Wrapper around memdom_query_id. Returns 1 if the
