@@ -77,39 +77,59 @@ int pyr_init(const char *lib_policy_file,
 /** Wrapper around memdom_alloc in the interpreter domain.
  */
 void *pyr_alloc_critical_runtime_state(size_t size) {
+    void *new_block = NULL;
+
     if (!runtime || runtime->interp_dom < 1)
         return NULL;
 
     printf("[%s] %lu bytes\n", __func__, size);
 
-    return memdom_alloc(runtime->interp_dom, size);
+    new_block = memdom_alloc(runtime->interp_dom, size);
+    if (!new_block)
+        return NULL;
+
+    if (pyr_add_new_alloc_record(runtime, new_block)) {
+        memdom_free(new_block);
+        return NULL;
+    }
+
+    return new_block;
 }
 
-/** Wrapper around memdom_free in any memdom.
+/** Wrapper around memdom_free in the interpreter domain.
  * Returns 1 if the state was freed, 0 otherwise.
  */
-int pyr_free_isolated_state(void *op) {
-  int memdom_id = -1;
-  memdom_id = memdom_query_id(op);
-  if (memdom_id > 0) {
-    if (runtime && memdom_id == runtime->interp_dom)
-      pyr_grant_critical_state_write();
-    memdom_free(op);
-    if (runtime && memdom_id == runtime->interp_dom)
-      pyr_revoke_critical_state_write();
-    return 1;
-  }
-  return 0;
+int pyr_free_critical_state(void *op) {
+    if (!runtime)
+        return 0;
+
+    if (runtime->interp_dom > 0) {
+        pyr_grant_critical_state_write();
+        memdom_free(op);
+        pyr_remove_allocation_record(runtime, op);
+        pyr_revoke_critical_state_write();
+        return 1;
+    }
+    return 0;
 }
 
 /** Wrapper around memdom_query_id. Returns 1 if the
  * given pointer is in the interpreter_dom, 0 otherwise.
  */
 int pyr_is_critical_state(void *op) {
-  if (!runtime)
+    struct allocation_record *runner;
+    if (!runtime)
+        return 0;
+
+    runner = runtime->alloc_blocks;
+    while(runner) {
+        if (runner->addr == op) {
+            printf("[%s] Found interpreter memory block at %p\n", __func__, runner->addr);
+            return 1;
+        }
+    }
+    runner = runner->next;
     return 0;
-  
-  return memdom_query_id(op) == runtime->interp_dom;
 }
 
 /** Grants the main thread write access to the interpreter domain.

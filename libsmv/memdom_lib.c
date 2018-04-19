@@ -43,7 +43,7 @@ int memdom_kill(int memdom_id){
     char buf[50];
     struct free_list_struct *free_list;
     struct alloc_record *alloc_list;
-    
+
     /* Bound checking */
     if( memdom_id < 0 || memdom_id > MAX_MEMDOM ) {
       fprintf(stderr, "memdom_kill(%d) failed\n", memdom_id);
@@ -278,19 +278,20 @@ int add_new_alloc(int memdom_id, void *addr, unsigned long size){
 #ifdef INTERCEPT_MALLOC
 #define malloc(sz) memdom_alloc(memdom_private_id(), sz)
 #endif
-    
+
     if (!new_record) {
       return -1;
     }
-      
+
     new_record->addr = addr;
     new_record->size = size;
     new_record->next = memdom[memdom_id]->alloc_list;
+    memdom[memdom_id]->alloc_list = new_record;
     return 0;
 }
 
 /* Search for the allocation record in the given memdom for the given
- * address. 
+ * address.
  * Note: expects caller to hold the memdom lock.
  */
 struct alloc_record *find_alloc_record(int memdom_id, void *addr) {
@@ -307,18 +308,19 @@ struct alloc_record *find_alloc_record(int memdom_id, void *addr) {
 }
 
 /* Remove the allocation record in the given memdom for the given
- * address. 
+ * address.
  * Note: expects caller to hold the memdom lock.
  */
 void remove_alloc(int memdom_id, void *addr) {
   struct alloc_record *runner = memdom[memdom_id]->alloc_list;
   struct alloc_record *tmp = NULL;
-  
+
   while(runner) {
     if (runner->next->addr == addr) {
       tmp = runner->next;
       runner->next = runner->next->next;
       free(tmp);
+      break;
     }
     runner = runner->next;
   }
@@ -460,24 +462,24 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
             }
             goto out;
         }
-	else {
-	  // we can try to merge this free list with the previous one
-	  if (prev) {
-	    // if we get here, we likely have another small
-	    // free list before us, so let's merge them
-	    prev->size += free_list->size;
-	    prev->next = free_list->next;
-	    rlog("[%s] Merge free lists to addr %p with list addr %p, sz 0x%lx\n",
-		 __func__, free_list->addr, prev->addr, prev->size);
-	    free(free_list);
-	    free_list = prev;
-	  }
-	  else {
-	    /* Move pointer forward */
-	    prev = free_list;
-	    free_list = free_list->next;
-	  }
-	}
+        else {
+          // we can try to merge this free list with the previous one
+          if (prev) {
+            // if we get here, we likely have another small
+            // free list before us, so let's merge them
+            prev->size += free_list->size;
+            prev->next = free_list->next;
+            rlog("[%s] Merge free lists to addr %p with list addr %p, sz 0x%lx\n",
+                 __func__, free_list->addr, prev->addr, prev->size);
+            free(free_list);
+            free_list = prev;
+          }
+          else {
+            /* Move pointer forward */
+            prev = free_list;
+            free_list = free_list->next;
+          }
+        }
     }
 
 out:
@@ -487,8 +489,8 @@ out:
     else{
         /* Record allocated memory in an allocation record for free to use later */
         if (add_new_alloc(memdom_id, memblock, sz) == -1)
-	    return NULL;
-	rlog("[%s] allocated 0x%lx bytes and returning data addr %p\n", __func__, sz, memblock);
+            return NULL;
+        rlog("[%s] allocated 0x%lx bytes and returning data addr %p\n", __func__, sz, memblock);
     }
 
     pthread_mutex_unlock(&memdom[memdom_id]->mlock);
@@ -510,15 +512,15 @@ void memdom_free(void* data){
     }
 
     pthread_mutex_lock(&memdom[memdom_id]->mlock);
-    
+
     /* Find the corresponding allocation record */
     record = find_alloc_record(memdom_id, data);
     if (!record) {
         rlog("[%s] Oops, could not find an allocation record for data %p\n", __func__, data);
-	pthread_mutex_unlock(&memdom[memdom_id]->mlock);
+        pthread_mutex_unlock(&memdom[memdom_id]->mlock);
         return;
     }
-    
+
     /* Free the memory */
     rlog("[%s] Freeing 0x%lx bytes at %p in memdom %d\n", __func__, record->size, data, memdom_id);
     memset(data, 0, record->size);

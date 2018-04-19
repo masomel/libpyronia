@@ -14,7 +14,7 @@
 static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
     pyr_native_ctx_t *c = *ctxp;
     int memdom_id = -1;
-    
+
     if (!c)
         return;
 
@@ -22,13 +22,13 @@ static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
         pyr_native_lib_context_free(&c->next);
 
     printf("[%s] Native context for lib %s\n", __func__, c->library_name);
-    
+
     if (c->library_name)
         memdom_free(c->library_name);
     if (c->memdom_id > 0) {
         memdom_id = c->memdom_id;
-	memdom_free(c);
-	memdom_kill(memdom_id);
+        memdom_free(c);
+        memdom_kill(memdom_id);
     }
     *ctxp = NULL;
 }
@@ -67,8 +67,44 @@ int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
     return err;
 }
 
+/* Insert a new allocation record at the head of the list.
+ * Note: expects caller to hold the memdom lock.
+ */
+int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
+                                void *addr) {
+    struct allocation_record *r = NULL;
+
+    r = memdom_alloc(ctx->interp_dom, sizeof(struct allocation_record));
+    if (!r) {
+      return -1;
+    }
+
+    r->addr = addr;
+    r->next = ctx->alloc_blocks;
+    ctx->alloc_blocks = r;
+    return 0;
+}
+
+/* Remove the allocation record for the given address.
+ * Assumes the address has been freed by the caller.
+ */
+void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) {
+  struct allocation_record *runner = ctx->alloc_blocks;
+  struct allocation_record *tmp = NULL;
+
+  while(runner) {
+    if (runner->next->addr == addr) {
+      tmp = runner->next;
+      runner->next = runner->next->next;
+      memdom_free(tmp);
+      break;
+    }
+    runner = runner->next;
+  }
+}
+
 int pyr_security_context_alloc(struct pyr_security_context **ctxp,
-			       pyr_cg_node_t *(*collect_callstack_cb)(void)) {
+                               pyr_cg_node_t *(*collect_callstack_cb)(void)) {
     int err = 0;
     struct pyr_security_context *c = NULL;
     int interp_memdom = -1;
@@ -94,8 +130,9 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
 
     c->interp_dom = interp_memdom;
     // this ensures that we really do revoke write access at the end of pyr_init
-    c->nested_grants = 1; 
-    
+    c->nested_grants = 1;
+    c->alloc_blocks = NULL;
+
     if (!collect_callstack_cb) {
         printf("[%s] Need non-null callstack collect callback\n", __func__);
         err = -EINVAL;
@@ -121,26 +158,40 @@ int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib) {
 
     while (runner != NULL) {
         if (!strncmp(runner->library_name, lib, strlen(lib))) {
-	    printf("[%s] Found memdom %d\n", __func__, runner->memdom_id);
+            printf("[%s] Found memdom %d\n", __func__, runner->memdom_id);
             return runner->memdom_id;
         }
     }
     return -1;
 }
 
+static void allocation_record_free(struct allocation_record **rp) {
+    struct allocation_record *r = *rp;
+
+    if (!r)
+        return;
+
+    if (r->next)
+        allocation_record_free(&r->next);
+
+    free(r);
+    *rp = NULL;
+}
+
 void pyr_security_context_free(struct pyr_security_context **ctxp) {
     struct pyr_security_context *c = *ctxp;
     int memdom_id = -1;
-    
+
     if (!c)
         return;
 
     printf("[%s] Freeing security context %p\n", __func__, c);
-    
+
     pyr_native_lib_context_free(&c->native_libs);
+    allocation_record_free(&c->alloc_blocks);
 
     printf("[%s] Freed all native libs\n", __func__);
-    
+
     memdom_free(c);
     *ctxp = NULL;
 }
