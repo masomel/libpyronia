@@ -68,7 +68,7 @@ int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
 }
 
 /* Insert a new allocation record at the head of the list.
- * Note: expects caller to hold the memdom lock.
+ * Note: expects caller to hold the memdom lock and the context mutex.
  */
 int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
                                 void *addr) {
@@ -90,6 +90,7 @@ int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
 
 /* Remove the allocation record for the given address.
  * Assumes the address will be freed by the caller.
+ * Note: expects the caller to hold the context mutex
  */
 void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) {
   struct allocation_record *runner = NULL;
@@ -153,6 +154,8 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     // is loaded via dlopen
     c->native_libs = NULL;
 
+    pthread_mutex_init(&c->mutex, NULL);
+    
     *ctxp = c;
     return 0;
  fail:

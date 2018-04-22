@@ -88,10 +88,12 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
     if (!new_block)
         return NULL;
 
+    pthread_mutex_lock(&runtime->mutex);
     if (pyr_add_new_alloc_record(runtime, new_block) == -1) {
         memdom_free(new_block);
-        return NULL;
+        new_block = NULL;
     }
+    pthread_mutex_unlock(&runtime->mutex);
 
     return new_block;
 }
@@ -105,7 +107,9 @@ int pyr_free_critical_state(void *op) {
 
     if (runtime->interp_dom > 0 && pyr_is_critical_state(op)) {
         pyr_grant_critical_state_write();
+	pthread_mutex_lock(&runtime->mutex);
 	pyr_remove_allocation_record(runtime, op);
+	pthread_mutex_unlock(&runtime->mutex);
         memdom_free(op);
 	printf("[%s] Freed %p\n", __func__, op);
         pyr_revoke_critical_state_write();
@@ -119,18 +123,23 @@ int pyr_free_critical_state(void *op) {
  */
 int pyr_is_critical_state(void *op) {
     struct allocation_record *runner;
+    int ret = 0;
     if (!runtime)
         return 0;
 
+    pthread_mutex_lock(&runtime->mutex);
     runner = runtime->alloc_blocks;
     while(runner) {
         if (runner->addr == op) {
             printf("[%s] Found interpreter memory block at %p\n", __func__, runner->addr);
-            return 1;
+            ret = 1;
+	    goto out;
         }
 	runner = runner->next;
     }
-    return 0;
+ out:
+    pthread_mutex_unlock(&runtime->mutex);
+    return ret;
 }
 
 /** Grants the main thread write access to the interpreter domain.
@@ -145,11 +154,13 @@ void pyr_grant_critical_state_write() {
     // slight optimization: if we've already granted access
     // let's avoid another downcall to change the memdom privileges
     // and simply keep track of how many times we've granted access
+    pthread_mutex_lock(&runtime->mutex);
     if (runtime->nested_grants == 0) {
       memdom_priv_add(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
     }
       
     runtime->nested_grants++;
+    pthread_mutex_unlock(&runtime->mutex);
 }
 
 /** Revokes the main thread's write privileges to the interpreter domain.
@@ -161,12 +172,14 @@ void pyr_revoke_critical_state_write() {
         return;
     }
 
+    pthread_mutex_lock(&runtime->mutex);
     runtime->nested_grants--;
 
     // same optimization as above
     if (runtime->nested_grants == 0) {
       memdom_priv_del(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
     }
+    pthread_mutex_unlock(&runtime->mutex);
 }
 
 /** Loads the given native library into its own memory domain.
@@ -254,7 +267,7 @@ int pyr_new_cg_node(pyr_cg_node_t **cg_root, const char* lib,
     *cg_root = n;
     return 0;
  fail:
-    memdom_free(n);
+    pyr_free_critical_state(n);
     return -1;
 }
 
@@ -270,8 +283,8 @@ static void free_node(pyr_cg_node_t **node) {
       free_node(&n->child);
     }
 
-    memdom_free(n->lib);
-    memdom_free(n);
+    pyr_free_critical_state(n->lib);
+    pyr_free_critical_state(n);
     *node = NULL;
 }
 
