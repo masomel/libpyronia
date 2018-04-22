@@ -68,7 +68,7 @@ int pyr_init(const char *lib_policy_file,
 
  out:
     if (policy)
-      memdom_free(policy);
+      pyr_free_critical_state(policy);
     /* Revoke access to the interpreter domain now */
     pyr_revoke_critical_state_write();
     return err;
@@ -88,7 +88,7 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
     if (!new_block)
         return NULL;
 
-    if (pyr_add_new_alloc_record(runtime, new_block)) {
+    if (pyr_add_new_alloc_record(runtime, new_block) == -1) {
         memdom_free(new_block);
         return NULL;
     }
@@ -103,10 +103,11 @@ int pyr_free_critical_state(void *op) {
     if (!runtime)
         return 0;
 
-    if (runtime->interp_dom > 0) {
+    if (runtime->interp_dom > 0 && pyr_is_critical_state(op)) {
         pyr_grant_critical_state_write();
+	pyr_remove_allocation_record(runtime, op);
         memdom_free(op);
-        pyr_remove_allocation_record(runtime, op);
+	printf("[%s] Freed %p\n", __func__, op);
         pyr_revoke_critical_state_write();
         return 1;
     }
@@ -127,8 +128,8 @@ int pyr_is_critical_state(void *op) {
             printf("[%s] Found interpreter memory block at %p\n", __func__, runner->addr);
             return 1;
         }
+	runner = runner->next;
     }
-    runner = runner->next;
     return 0;
 }
 

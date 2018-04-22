@@ -73,6 +73,8 @@ int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
 int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
                                 void *addr) {
     struct allocation_record *r = NULL;
+    if (!ctx)
+      return -1;
 
     r = memdom_alloc(ctx->interp_dom, sizeof(struct allocation_record));
     if (!r) {
@@ -82,23 +84,30 @@ int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
     r->addr = addr;
     r->next = ctx->alloc_blocks;
     ctx->alloc_blocks = r;
+    printf("[%s] Allocated new block at %p\n", __func__, addr);
     return 0;
 }
 
 /* Remove the allocation record for the given address.
- * Assumes the address has been freed by the caller.
+ * Assumes the address will be freed by the caller.
  */
 void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) {
-  struct allocation_record *runner = ctx->alloc_blocks;
-  struct allocation_record *tmp = NULL;
+  struct allocation_record *runner = NULL;
+  struct allocation_record *prev = NULL;
 
+  if (!ctx)
+    return;
+
+  runner = ctx->alloc_blocks;
   while(runner) {
-    if (runner->next->addr == addr) {
-      tmp = runner->next;
-      runner->next = runner->next->next;
-      memdom_free(tmp);
+    if (runner->addr == addr) {
+      if (prev)
+	prev->next = runner->next;
+      memdom_free(runner);
+      printf("[%s] Removed block at %p\n", __func__, addr);
       break;
     }
+    prev = runner;
     runner = runner->next;
   }
 }
@@ -174,7 +183,7 @@ static void allocation_record_free(struct allocation_record **rp) {
     if (r->next)
         allocation_record_free(&r->next);
 
-    free(r);
+    memdom_free(r);
     *rp = NULL;
 }
 

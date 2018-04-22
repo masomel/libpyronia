@@ -107,7 +107,7 @@ static int read_policy_file(const char *policy_fname, char **buf) {
     }
  fail:
     if (buffer)
-        memdom_free(buffer);
+        pyr_free_critical_state(buffer);
     if (f)
         fclose(f);
     *buf = NULL;

@@ -313,15 +313,16 @@ struct alloc_record *find_alloc_record(int memdom_id, void *addr) {
  */
 void remove_alloc(int memdom_id, void *addr) {
   struct alloc_record *runner = memdom[memdom_id]->alloc_list;
-  struct alloc_record *tmp = NULL;
+  struct alloc_record *prev = NULL;
 
   while(runner) {
-    if (runner->next->addr == addr) {
-      tmp = runner->next;
-      runner->next = runner->next->next;
-      free(tmp);
+    if (runner->addr == addr) {
+      if (prev)
+	prev->next = runner->next;
+      free(runner);
       break;
     }
+    prev = runner;
     runner = runner->next;
   }
 }
@@ -506,7 +507,7 @@ void memdom_free(void* data){
     /* Let's figure out first if this data even is allocated in
      * a memdom. */
     memdom_id = memdom_query_id(data);
-    if (memdom_id == -1) {
+    if (memdom_id <= 0) {
         rlog("[%s] Attempted to free non-memdom data %p\n", __func__, data);
         return;
     }
