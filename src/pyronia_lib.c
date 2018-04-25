@@ -23,6 +23,7 @@
 
 static struct pyr_security_context *runtime;
 static pthread_mutex_t security_ctx_mutex;
+static int pyr_smv_id = -1;
 
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
@@ -42,6 +43,17 @@ int pyr_init(const char *lib_policy_file,
         printf("[%s] Memdom subsystem registration failure\n", __func__);
         goto out;
     }
+
+    // create another SMV to be used by threads originally created by
+    // pthread_create. We won't allow mixing pthreads woth smvthreads
+    pyr_smv_id = smv_create();
+    if (pyr_smv_id == -1) {
+      printf("[%s] Could not create an SMV for pyronia threads\n", __func__);
+      goto out;
+    }
+    // We need this SMV to be able to access any Python functions
+    smv_join_domain(MAIN_THREAD, pyr_smv_id);
+    memdom_priv_add(MAIN_THREAD, pyr_smv_id, MEMDOM_READ | MEMDOM_WRITE);
 
     /* Initialize the runtime's security context */
     err = pyr_security_context_alloc(&runtime, collect_callstack_cb);
@@ -185,6 +197,26 @@ void pyr_revoke_critical_state_write() {
       memdom_priv_del(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
     }
     pthread_mutex_unlock(&security_ctx_mutex);
+}
+
+/** Starts an SMV thread that has access to the MAIN_THREAD memdom.
+ * I.e. this is a wrapper for smvthread_create that is supposed to be used
+ * in the language runtime as a replacement for all pthread_create calls.
+ * This is needed because SMV doesn't allow you to spawn other smvthreads
+ * to run in the MAIN_THREAD smv.
+ */
+int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
+		      void*(fn)(void*), void* args) {
+    int ret = -1;
+#ifdef PYR_INTERCEPT_PTHREAD_CREATE
+#undef pthread_create
+#endif
+    ret = smvthread_create_attr(pyr_smv_id, tid, attr, fn, args);
+#ifdef PYR_INTERCEPT_PTHREAD_CREATE
+#define pthread_create(tid, attr, fn, args) pyr_thread_create(tid, attr, fn, args)
+#endif
+    printf("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
+    return ret;
 }
 
 /** Loads the given native library into its own memory domain.

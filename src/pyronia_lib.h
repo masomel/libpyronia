@@ -9,6 +9,11 @@
 #include <stdlib.h>
 #include <linux/pyronia_mac.h>
 
+#define PYR_INTERCEPT_PTHREAD_CREATE
+#ifdef PYR_INTERCEPT_PTHREAD_CREATE
+#define pthread_create(tid, attr, fn, args) pyr_thread_create(tid, attr, fn, args)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -20,6 +25,8 @@ extern "C" {
     void pyr_grant_critical_state_write(void);
     void pyr_revoke_critical_state_write(void);
     int pyr_free_critical_state(void *op);
+    int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
+			void*(fn)(void*), void* args);
     int pyr_load_native_lib_isolated(const char *lib);
     int pyr_run_native_func_isolated(const char *lib, void *(*func)(void));
     void pyr_exit(void);

@@ -55,7 +55,7 @@ int smv_is_in_domain(int memdom_id, int smv_id);
 int smvthread_create(int smv_id, pthread_t *tid, void *(fn)(void*), void *args);
 
 /* Create an SMV thread with the given attributes running in an SMV */
-int smvthread_create_attr(int smv_id, pthread_t* tid, pthread_attr_t *attr, void*(fn)(void*), void* args);
+int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr, void*(fn)(void*), void* args);
   
 /* Check whether a smv exists */
 int smv_exists(int smv_id);

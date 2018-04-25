@@ -167,12 +167,13 @@ int smv_exists(int smv_id) {
  * Return the smv_id the new thread is running in. On error, return -1.
  * If defined as pthread_create, we should return 0 but not the smv id.
  */
-int smvthread_create_attr(int smv_id, pthread_t* tid, pthread_attr_t *attr, void*(fn)(void*), void* args){
+int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr, void*(fn)(void*), void* args){
   int rv = 0;
   char buf[100];
   int memdom_id;
   void* stack_base;
   unsigned long stack_size;
+  pthread_attr_t attr1;
 
   /* When caller specify smv_id = -1, smvthread_create automatically creates a new smv
    * for the about-to-run thread to running in.
@@ -197,8 +198,9 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, pthread_attr_t *attr, void
   /* Atomic operation */
   pthread_mutex_lock(& create_thread_mutex);
 
+  attr1 = *attr;
   if (attr == NULL)
-    pthread_attr_init(attr);
+    pthread_attr_init(&attr1);
 #ifdef THREAD_PRIVATE_STACK // Use private stack for thread
   /* Create a thread-local memdom and make smv join it */
   memdom_id = memdom_create();
@@ -226,12 +228,12 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, pthread_attr_t *attr, void
     pthread_mutex_unlock(& create_thread_mutex);
     return -1;
   }
-  pthread_attr_setstack(attr, stack_base, stack_size);
+  pthread_attr_setstack(attr1, stack_base, stack_size);
   printf("[%s] creating thread with stack base: %p, end: 0x%lx\n", __func__, stack_base, (unsigned long)stack_base + stack_size);
 
   /* Record thread-private memdom addr and size */
-  memdom[memdom_id]->start = stack_base;
-  memdom[memdom_id]->total_size = stack_size;
+  //memdom[memdom_id]->start = stack_base;
+  //memdom[memdom_id]->total_size = stack_size;
 
 #endif // THREAD_PRIVATE_STACK
 
@@ -250,7 +252,7 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, pthread_attr_t *attr, void
 #endif
   /* Create a pthread (kernel knows it's a smv thread because we registered a smv id for this thread */
   /* Use the real pthread_create */
-  rv = pthread_create(tid, attr, fn, args);
+  rv = pthread_create(tid, &attr1, fn, args);
   if(rv){
     fprintf(stderr, "pthread_create for smv %d failed\n", smv_id);
     pthread_mutex_unlock(& create_thread_mutex);
@@ -279,5 +281,3 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, pthread_attr_t *attr, void
 int smvthread_create(int smv_id, pthread_t* tid, void*(fn)(void*), void* args) {
   return smvthread_create_attr(smv_id, tid, NULL, fn, args);
 }
-
-
