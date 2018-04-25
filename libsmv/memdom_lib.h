@@ -7,6 +7,8 @@
 #include "smv_lib.h"
 #include "kernel_comm.h"
 
+#define MAIN_THREAD 0
+
 /* Permission */
 #define MEMDOM_READ             0x00000001
 #define MEMDOM_WRITE            0x00000002
@@ -17,7 +19,7 @@
 #define MAP_MEMDOM      0x00800000
 
 /* Maximum heap size a memdom can use */
-#define MEMDOM_HEAP_SIZE 0x4000 // 16K
+#define MEMDOM_HEAP_SIZE 0x1000 // 4K
 
 /* Maximum number of memdoms a thread can have: 1024*/
 #define MAX_MEMDOM 1024
@@ -59,8 +61,7 @@ struct alloc_record {
  */
 struct memdom_metadata_struct {
     int memdom_id;
-    void *start;    // start of this memdom's addr (inclusive)
-    unsigned long total_size; // the total memory size of this memdom
+    struct alloc_record *mmap_blocks; // formerly single start and total_size
     struct free_list_struct *free_list_head;
     struct free_list_struct *free_list_tail;
     struct alloc_record *alloc_list;
