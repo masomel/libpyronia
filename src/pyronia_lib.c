@@ -22,6 +22,7 @@
 #include "util.h"
 
 static struct pyr_security_context *runtime;
+static pthread_mutex_t security_ctx_mutex;
 
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
@@ -64,6 +65,8 @@ int pyr_init(const char *lib_policy_file,
         goto out;
     }
 
+    pthread_mutex_init(&security_ctx_mutex, NULL);
+
     pyr_callstack_req_listen();
 
  out:
@@ -84,16 +87,17 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 
     printf("[%s] %lu bytes\n", __func__, size);
 
+    pthread_mutex_lock(&security_ctx_mutex);
+
     new_block = memdom_alloc(runtime->interp_dom, size);
     if (!new_block)
         return NULL;
 
-    pthread_mutex_lock(&runtime->mutex);
     if (pyr_add_new_alloc_record(runtime, new_block) == -1) {
         memdom_free(new_block);
         new_block = NULL;
     }
-    pthread_mutex_unlock(&runtime->mutex);
+    pthread_mutex_unlock(&security_ctx_mutex);
 
     return new_block;
 }
@@ -107,10 +111,10 @@ int pyr_free_critical_state(void *op) {
 
     if (runtime->interp_dom > 0 && pyr_is_critical_state(op)) {
         pyr_grant_critical_state_write();
-	pthread_mutex_lock(&runtime->mutex);
+	pthread_mutex_lock(&security_ctx_mutex);
 	pyr_remove_allocation_record(runtime, op);
-	pthread_mutex_unlock(&runtime->mutex);
         memdom_free(op);
+	pthread_mutex_unlock(&security_ctx_mutex);
 	printf("[%s] Freed %p\n", __func__, op);
         pyr_revoke_critical_state_write();
         return 1;
@@ -127,18 +131,18 @@ int pyr_is_critical_state(void *op) {
     if (!runtime)
         return 0;
 
-    pthread_mutex_lock(&runtime->mutex);
+    pthread_mutex_lock(&security_ctx_mutex);
     runner = runtime->alloc_blocks;
     while(runner) {
         if (runner->addr == op) {
-            printf("[%s] Found interpreter memory block at %p\n", __func__, runner->addr);
+	  printf("[%s] Found interpreter memory block for addr %p at %p\n", __func__, runner->addr, runner);
             ret = 1;
 	    goto out;
         }
 	runner = runner->next;
     }
  out:
-    pthread_mutex_unlock(&runtime->mutex);
+    pthread_mutex_unlock(&security_ctx_mutex);
     return ret;
 }
 
@@ -151,16 +155,17 @@ void pyr_grant_critical_state_write() {
         return;
     }
 
+    pthread_mutex_lock(&security_ctx_mutex);
+
     // slight optimization: if we've already granted access
     // let's avoid another downcall to change the memdom privileges
     // and simply keep track of how many times we've granted access
-    pthread_mutex_lock(&runtime->mutex);
     if (runtime->nested_grants == 0) {
       memdom_priv_add(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
     }
-      
+
     runtime->nested_grants++;
-    pthread_mutex_unlock(&runtime->mutex);
+    pthread_mutex_unlock(&security_ctx_mutex);
 }
 
 /** Revokes the main thread's write privileges to the interpreter domain.
@@ -172,14 +177,14 @@ void pyr_revoke_critical_state_write() {
         return;
     }
 
-    pthread_mutex_lock(&runtime->mutex);
+    pthread_mutex_lock(&security_ctx_mutex);
     runtime->nested_grants--;
 
     // same optimization as above
     if (runtime->nested_grants == 0) {
       memdom_priv_del(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
     }
-    pthread_mutex_unlock(&runtime->mutex);
+    pthread_mutex_unlock(&security_ctx_mutex);
 }
 
 /** Loads the given native library into its own memory domain.
@@ -234,6 +239,7 @@ void pyr_exit() {
     pyr_security_context_free(&runtime);
     memdom_kill(interp_dom);
     pyr_revoke_critical_state_write();
+    pthread_mutex_destroy(&security_ctx_mutex);
 }
 
 /** Wrapper around the runtime callstack collection callback

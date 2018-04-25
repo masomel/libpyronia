@@ -8,8 +8,6 @@
 #ifndef __PYR_SEC_CTX_H
 #define __PYR_SEC_CTX_H
 
-#include <pthread.h>
-
 struct pyr_native_lib_context {
     char *library_name; // runtimes also identify libraries by string name
     int memdom_id; // the memdom this native library belongs to
@@ -46,8 +44,6 @@ struct pyr_security_context {
     /* The function used to collect a language runtime-specific
      * callstack. This callback needs to be set at initialization time. */
     pyr_cg_node_t *(*collect_callstack_cb)(void);
-
-    pthread_mutex_t mutex;
 };
 
 #ifdef __cplusplus

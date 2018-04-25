@@ -73,7 +73,7 @@ int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
 int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
                                 void *addr) {
     struct allocation_record *r = NULL;
-    if (!ctx)
+    if (!ctx || !addr)
       return -1;
 
     r = memdom_alloc(ctx->interp_dom, sizeof(struct allocation_record));
@@ -84,7 +84,7 @@ int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
     r->addr = addr;
     r->next = ctx->alloc_blocks;
     ctx->alloc_blocks = r;
-    printf("[%s] Allocated new block at %p\n", __func__, addr);
+    printf("[%s] Allocated new block for addr %p at %p\n", __func__, addr, r);
     return 0;
 }
 
@@ -153,8 +153,6 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     // this list will be added to whenever a new non-builtin extenion
     // is loaded via dlopen
     c->native_libs = NULL;
-
-    pthread_mutex_init(&c->mutex, NULL);
     
     *ctxp = c;
     return 0;

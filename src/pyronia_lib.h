@@ -9,8 +9,6 @@
 #include <stdlib.h>
 #include <linux/pyronia_mac.h>
 
-#define MAIN_THREAD 0
-
 #ifdef __cplusplus
 extern "C" {
 #endif
