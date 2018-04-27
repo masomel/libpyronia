@@ -30,7 +30,7 @@ int message_to_kernel(char *message) {
     printf("create netlink socket failure\n");
     goto out;
   }
-  
+
   err = send_message(nl_sock, nl_fam, NL_CMD, NL_ATTR, port_id, message);
 
  out:
@@ -55,7 +55,7 @@ int smv_main_init(int global) {
 
   nl_fam = get_family_id(nl_sock, port_id, FAMILY_STR);
   teardown_netlink_socket(nl_sock);
-  
+
   /* Set mm->using_smv to true in kernel space */
   rv = message_to_kernel("smv,maininit");
   if (rv != 0) {
@@ -232,8 +232,7 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
   printf("[%s] creating thread with stack base: %p, end: 0x%lx\n", __func__, stack_base, (unsigned long)stack_base + stack_size);
 
   /* Record thread-private memdom addr and size */
-  //memdom[memdom_id]->start = stack_base;
-  //memdom[memdom_id]->total_size = stack_size;
+  add_new_mmap_block(memdom_id, stack_base, stack_size);
 
 #endif // THREAD_PRIVATE_STACK
 

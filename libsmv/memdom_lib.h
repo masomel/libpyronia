@@ -109,6 +109,9 @@ int memdom_query_id(void *obj);
 /* Get the calling thread's default memdom id */
 int memdom_private_id(void);
 
+/* Keep track of a new mmap'd block for the given memry domain */
+void add_new_mmap_block(int memdom_id, void *addr, unsigned long size);
+
 #ifdef __cplusplus
 }
 #endif

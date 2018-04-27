@@ -62,7 +62,7 @@ int memdom_kill(int memdom_id){
         if( rv != 0 ) {
             fprintf(stderr, "memdom munmap failed, start: %p, sz: 0x%lx bytes\n", mmap_block->addr, mmap_block->size);
         }
-	mmap_block = mmap_block->next;
+        mmap_block = mmap_block->next;
     }
 
     /* Free all free_list_struct in this memdom */
@@ -100,7 +100,7 @@ int memdom_kill(int memdom_id){
 /* Insert a new allocation record at the head of the list.
  * Note: expects caller to hold the memdom lock.
  */
-void add_new_alloc(struct alloc_record **head, void *addr, unsigned long size){
+static void add_new_alloc(struct alloc_record **head, void *addr, unsigned long size){
     struct alloc_record *new_record = NULL;
 
 #ifdef INTERCEPT_MALLOC
@@ -117,12 +117,19 @@ void add_new_alloc(struct alloc_record **head, void *addr, unsigned long size){
     *head = new_record;
 }
 
+
+void add_new_mmap_block(int memdom_id, void *addr, unsigned long size) {
+    pthread_mutex_lock(&memdom[memdom_id]->mlock);
+    add_new_alloc(&memdom[memdom_id]->mmap_blocks, addr, size);
+    pthread_mutex_unlock(&memdom[memdom_id]->mlock);
+}
+
 /* Search for the allocation record in the given memdom for the given
  * address.
  * Note: expects caller to hold the memdom lock.
  */
 struct alloc_record *find_alloc_record(struct alloc_record *head,
-				       void *addr) {
+                                       void *addr) {
   struct alloc_record *runner = head;
 
   while(runner) {
@@ -144,14 +151,14 @@ void remove_alloc(struct alloc_record *head, void *addr) {
 
   if (!head)
     return;
-  
+
   // check if first entry is the one we need to remove
   if (runner && runner->addr == addr) {
     head = runner->next;
     memdom_free(runner);
     return;
   }
-  
+
   while(runner->next) {
     if (runner->next->addr == addr) {
       tmp = runner->next;
@@ -193,7 +200,7 @@ void *memdom_mmap(int memdom_id,
     }
 
     add_new_alloc(&memdom[memdom_id]->mmap_blocks, base, len);
-    
+
     rlog("Memdom ID %d mmaped at %p\n", memdom_id, memdom[memdom_id]->mmap_blocks->addr);
 
     rlog("[%s] memdom %d mmaped 0x%lx bytes at %p\n", __func__, memdom_id, len, base);
@@ -352,7 +359,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
     void *memblock = NULL;
     struct free_list_struct *free_list = NULL;
     int alloc_retry = 0;
-    
+
     /* Memdom 0 is in global memdom, Memdom -1 when defined THREAD_PRIVATE_STACK, use malloc */
     if(memdom_id == 0){
 #ifdef INTERCEPT_MALLOC
@@ -374,17 +381,17 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
         /* Call mmap to set up initial memory region */
 
         memblock = memdom_mmap(memdom_id, 0, MEMDOM_HEAP_SIZE,
-			       PROT_READ | PROT_WRITE,
-			       MAP_PRIVATE | MAP_ANONYMOUS | MAP_MEMDOM, 0, 0);
+                               PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_ANONYMOUS | MAP_MEMDOM, 0, 0);
         if( memblock == MAP_FAILED ) {
-	    fprintf(stderr, "Failed to memdom_alloc using mmap for memdom %d\n", memdom_id);
-	    memblock = NULL;
-	    goto out;
-	}
+            fprintf(stderr, "Failed to memdom_alloc using mmap for memdom %d\n", memdom_id);
+            memblock = NULL;
+            goto out;
+        }
 
-	/* Initialize free list  */
-	free_list_init(memdom[memdom_id]->mmap_blocks, memdom_id);
-	memdom[memdom_id]->free_list_head = NULL;   // reclaimed chunk are inserted to head    
+        /* Initialize free list  */
+        free_list_init(memdom[memdom_id]->mmap_blocks, memdom_id);
+        memdom[memdom_id]->free_list_head = NULL;   // reclaimed chunk are inserted to head
     }
 
  alloc_try:
@@ -397,11 +404,100 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
     sz = round_up(sz, CHUNK_SIZE);
     rlog("[%s] request rounded to 0x%lx bytes\n", __func__, sz);
 
-    /* Get memory from the tail of free list, if the last free list is not available for allocation,
-     * start searching the free list from the head until first fit is found.
+    free_list = memdom[memdom_id]->free_list_head;
+    /* Allocate from head:
+     * let's start searching from the head for the first fit */
+    rlog("[%s] memdom %d search from head for 0x%lx bytes\n", __func__, memdom_id, sz);
+    dumpFreeListHead(memdom_id);
+    struct free_list_struct *prev = NULL;
+    while (free_list) {
+        if( prev ) {
+            rlog("[%s] memdom %d prev->addr %p, prev->size 0x%lx bytes\n", __func__, memdom_id, prev->addr, prev->size);
+        }
+        if( free_list ) {
+            rlog("[%s] memdom %d free_list->addr %p, free_list->size 0x%lx bytes\n", __func__, memdom_id, free_list->addr, free_list->size);
+        }
+
+        /* Favor a perfectly fitting free list! */
+        if( sz == free_list->size ) {
+             /* Get memory address */
+            memblock = free_list->addr;
+
+            /* Remove this free list struct:
+             * since there's no memory to allcoate from here anymore
+             */
+            if (free_list == memdom[memdom_id]->free_list_head) {
+                memdom[memdom_id]->free_list_head = memdom[memdom_id]->free_list_head->next;
+                rlog("[%s] memdom %d set free_list_head to free_list_head->next\n", __func__, memdom_id);
+            }
+            else {
+                prev->next = free_list->next;
+                rlog("[%s] memdom %d set prev->next to free_list->next\n", __func__, memdom_id);
+            }
+            free(free_list);
+
+            rlog("[%s] memdom %d removed free list\n", __func__, memdom_id);
+            goto out;
+        }
+        else {
+            prev = free_list;
+            free_list = free_list->next;
+        }
+    }
+
+    /* We got here, which means there is no free list that
+     * matches the exact size of the block we want to allocate.
+     * Let's try to find a free list from the head that is larger,
+     * and adjust its size instead. */
+    free_list = memdom[memdom_id]->free_list_head;
+    rlog("[%s] memdom %d search from head for large block for 0x%lx bytes\n", __func__, memdom_id, sz);
+    prev = NULL;
+    while(free_list) {
+        if( free_list ) {
+            rlog("[%s] memdom %d free_list->addr %p, free_list->size 0x%lx bytes\n", __func__, memdom_id, free_list->addr, free_list->size);
+        }
+
+        if (sz < free_list->size) {
+            memblock = free_list->addr;
+            /* Adjust free list:
+             * if the remaining chunk size if greater than CHUNK_SIZE
+             */
+            if( free_list->size - sz >= CHUNK_SIZE ) {
+                char *ptr = (char*)free_list->addr;
+                ptr = ptr + sz;
+                free_list->addr = (void*)ptr;
+                free_list->size = free_list->size - sz;
+                rlog("[%s] Adjust free list to addr %p, sz 0x%lx\n",
+                     __func__, free_list->addr, free_list->size);
+            }
+            else {
+                /* Remove this free list struct:
+                 * since there's no memory to allocate from here anymore
+                 */
+                if (free_list == memdom[memdom_id]->free_list_head) {
+                    memdom[memdom_id]->free_list_head = memdom[memdom_id]->free_list_head->next;
+                    rlog("[%s] memdom %d set free_list_head to free_list_head->next\n", __func__, memdom_id);
+                }
+                else {
+                    prev->next = free_list->next;
+                    rlog("[%s] memdom %d set prev->next to free_list->next\n", __func__, memdom_id);
+                }
+                free(free_list);
+                rlog("[%s] memdom %d removed free list\n", __func__, memdom_id);
+            }
+            goto out;
+        }
+        else {
+            /* Move pointer forward */
+            prev = free_list;
+            free_list = free_list->next;
+        }
+    }
+
+    /* Get memory from the tail of free list, since we couldn't find
+     * a suitable free list from the head available for allocation.
      */
     free_list = memdom[memdom_id]->free_list_tail;
-
     /* Allocate from tail:
      * check if the last element in free list is available,
      * allocate memory from it */
@@ -421,100 +517,30 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
             memdom[memdom_id]->free_list_tail = NULL;
             rlog("[%s] free_list size is 0, freed this free_list_struct, the next allocate should request from free_list_head\n", __func__);
         }
-        goto out;
-    }
-
-    /* Allocate from head:
-     * ok the last free list is not available,
-     * let's start searching from the head for the first fit */
-    rlog("[%s] memdom %d search from head for 0x%lx bytes\n", __func__, memdom_id, sz);
-    dumpFreeListHead(memdom_id);
-    free_list = memdom[memdom_id]->free_list_head;
-    struct free_list_struct *prev = NULL;
-    while (free_list) {
-        if( prev ) {
-            rlog("[%s] memdom %d prev->addr %p, prev->size 0x%lx bytes\n", __func__, memdom_id, prev->addr, prev->size);
-        }
-        if( free_list ) {
-            rlog("[%s] memdom %d free_list->addr %p, free_list->size 0x%lx bytes\n", __func__, memdom_id, free_list->addr, free_list->size);
-        }
-
-        /* Found free list! */
-        if( sz <= free_list->size ) {
-
-	     /* Get memory address */
-            memblock = (char*)free_list->addr;
-
-            /* Adjust free list:
-             * if the remaining chunk size if greater then CHUNK_SIZE
-             */
-            if( free_list->size - sz >= CHUNK_SIZE ) {
-                char *ptr = (char*)free_list->addr;
-                ptr = ptr + sz;
-                free_list->addr = (void*)ptr;
-                free_list->size = free_list->size - sz;
-                rlog("[%s] Adjust free list to addr %p, sz 0x%lx\n",
-                        __func__, free_list->addr, free_list->size);
-            }
-            /* Remove this free list struct:
-             * since there's no memory to allcoate from here anymore
-             */
-            else{
-                if ( free_list == memdom[memdom_id]->free_list_head ) {
-                    memdom[memdom_id]->free_list_head = memdom[memdom_id]->free_list_head->next;
-                    rlog("[%s] memdom %d set free_list_head to free_list_head->next\n", __func__, memdom_id);
-                }
-                else {
-                    prev->next = free_list->next;
-                    rlog("[%s] memdom %d set prev->next to free_list->next\n", __func__, memdom_id);
-                }
-                free(free_list);
-
-                rlog("[%s] memdom %d removed free list\n", __func__, memdom_id);
-            }
-            goto out;
-        }
-        else {
-          // we can try to merge this free list with the previous one
-          if (prev && prev->addr+prev->size == free_list->addr) {
-            // if we get here, we likely have another small
-            // free list before us, so let's merge them
-            prev->size += free_list->size;
-            prev->next = free_list->next;
-            printf("[%s] Merge free lists to addr %p with list addr %p, sz 0x%lx\n",
-                 __func__, free_list->addr, prev->addr, prev->size);
-            free(free_list);
-            free_list = prev;
-          }
-          else {
-            /* Move pointer forward */
-            prev = free_list;
-            free_list = free_list->next;
-          }
-        }
     }
 
 out:
     if( !memblock ) {
         rlog("[%s] Retrying allocation with new mmap block\n", __func__);
-	memblock = memdom_mmap(memdom_id, 0, MEMDOM_HEAP_SIZE,
-			       PROT_READ | PROT_WRITE,
-			       MAP_PRIVATE | MAP_ANONYMOUS | MAP_MEMDOM, 0, 0);
+        memblock = memdom_mmap(memdom_id, 0, MEMDOM_HEAP_SIZE,
+                               PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_ANONYMOUS | MAP_MEMDOM, 0, 0);
         if (memblock == MAP_FAILED && alloc_retry) {
-	  fprintf(stderr, "Failed to memdom_alloc using mmap for memdom %d\n", memdom_id);
-	  memblock = NULL;
-	}
-	else {
-	  rlog("[%s] Allocated new mmap block %p\n", __func__, memblock);
-	  free_list_init(memdom[memdom_id]->mmap_blocks, memdom_id);
-	  alloc_retry = 1;
-	  goto alloc_try;
-	}
+          fprintf(stderr, "Failed to memdom_alloc using mmap for memdom %d\n", memdom_id);
+          memblock = NULL;
+        }
+        else {
+          rlog("[%s] Allocated new mmap block %p\n", __func__, memblock);
+          free_list_init(memdom[memdom_id]->mmap_blocks, memdom_id);
+          alloc_retry = 1;
+          goto alloc_try;
+        }
     }
     else{
-        /* Record allocated memory in an allocation record for free to use later */
+        /* Record allocated memory in an allocation record for free to
+         * use later */
         add_new_alloc(&memdom[memdom_id]->alloc_list, memblock, sz);
-	rlog("[%s] allocated 0x%lx bytes and returning data addr %p\n", __func__, sz, memblock);
+        rlog("[%s] allocated 0x%lx bytes and returning data addr %p\n", __func__, sz, memblock);
     }
 
     pthread_mutex_unlock(&memdom[memdom_id]->mlock);
@@ -548,11 +574,32 @@ void memdom_free(void* data){
     rlog("[%s] Freeing 0x%lx bytes at %p in memdom %d\n", __func__, record->size, data, memdom_id);
     memset(data, 0, record->size);
 
-    /* Create a new free list node */
+    /* Check if this memory block is adjacent to an extising free list.
+     * If so, merge the two, instead of allocating a new free_list. */
+    struct free_list_struct *free_list = memdom[memdom_id]->free_list_head;
+    while(free_list) {
+        if (free_list->addr + free_list->size == record->addr) {
+            // the freed block is above this free list's block
+            // adjust the free list
+            free_list->size += record->size;
+            goto out;
+        }
+        else if (record->addr + record->size == free_list->addr) {
+            // the freed block is below this free list's block
+            // adjust the free list
+            free_list->size += record->size;
+            free_list->addr = record->addr;
+            goto out;
+        }
+        free_list = free_list->next;
+    }
+
+    /* We got here, which means the freed block does not form
+     * a contiguous block of memory. Create a new free list node */
 #ifdef INTERCEPT_MALLOC
 #undef malloc
 #endif
-    struct free_list_struct *free_list = (struct free_list_struct *) malloc(sizeof(struct free_list_struct));
+    free_list = (struct free_list_struct *) malloc(sizeof(struct free_list_struct));
 #ifdef INTERCEPT_MALLOC
 #define malloc(sz) memdom_alloc(memdom_private_id(), sz)
 #endif
@@ -563,6 +610,7 @@ void memdom_free(void* data){
     /* Insert the block into free list head */
     free_list_insert_to_head(memdom_id, free_list);
 
+ out:
     /* Remove the allocation record */
     remove_alloc(memdom[memdom_id]->alloc_list, record->addr);
 
