@@ -114,7 +114,7 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
     if (callstack)
         pyr_free_callgraph(&callstack);
     if (callstack_str)
-        memdom_free(callstack_str);
+        pyr_free_critical_state(callstack_str);
     return err;
 
 }
@@ -184,7 +184,7 @@ int pyr_init_si_comm(char *policy) {
 
  out:
     if (reg_str)
-        memdom_free(reg_str);
+        pyr_free_critical_state(reg_str);
     if (!err)
         printf("[%s] Registered process at port %d; SI_COMM family id = %d\n",
            __func__, si_port, nl_fam);

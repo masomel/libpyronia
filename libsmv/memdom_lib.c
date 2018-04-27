@@ -140,17 +140,26 @@ struct alloc_record *find_alloc_record(struct alloc_record *head,
  * Note: expects caller to hold the memdom lock.
  */
 void remove_alloc(struct alloc_record *head, void *addr) {
-  struct alloc_record *runner = head;
-  struct alloc_record *prev = NULL;
+  struct alloc_record *runner = head, *tmp = NULL;
 
-  while(runner) {
-    if (runner->addr == addr) {
-      if (prev)
-	prev->next = runner->next;
-      free(runner);
+  if (!head)
+    return;
+  
+  // check if first entry is the one we need to remove
+  if (runner && runner->addr == addr) {
+    head = runner->next;
+    memdom_free(runner);
+    return;
+  }
+  
+  while(runner->next) {
+    if (runner->next->addr == addr) {
+      tmp = runner->next;
+      runner->next = tmp->next;
+      free(tmp);
+      tmp = NULL;
       break;
     }
-    prev = runner;
     runner = runner->next;
   }
 }
@@ -467,7 +476,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
         }
         else {
           // we can try to merge this free list with the previous one
-          if (prev && (prev->addr+prev->size+1 == free_list->addr)) {
+          if (prev && prev->addr+prev->size == free_list->addr) {
             // if we get here, we likely have another small
             // free list before us, so let's merge them
             prev->size += free_list->size;
@@ -487,7 +496,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
 
 out:
     if( !memblock ) {
-        fprintf(stderr, "memdom_alloc failed: no memory can be allocated in memdom %d\n", memdom_id);
+        rlog("[%s] Retrying allocation with new mmap block\n", __func__);
 	memblock = memdom_mmap(memdom_id, 0, MEMDOM_HEAP_SIZE,
 			       PROT_READ | PROT_WRITE,
 			       MAP_PRIVATE | MAP_ANONYMOUS | MAP_MEMDOM, 0, 0);

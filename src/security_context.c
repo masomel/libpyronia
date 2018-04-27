@@ -93,22 +93,29 @@ int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
  * Note: expects the caller to hold the context mutex
  */
 void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) {
-  struct allocation_record *runner = NULL;
-  struct allocation_record *prev = NULL;
+  struct allocation_record *runner = NULL, *tmp = NULL;
 
-  if (!ctx)
+  if (!ctx || !ctx->alloc_blocks)
     return;
-
+  
   runner = ctx->alloc_blocks;
-  while(runner) {
-    if (runner->addr == addr) {
-      if (prev)
-	prev->next = runner->next;
-      memdom_free(runner);
-      printf("[%s] Removed block at %p\n", __func__, addr);
+
+  // check if first entry is the one we need to remove
+  if (runner && runner->addr == addr) {
+    ctx->alloc_blocks = runner->next;
+    memdom_free(runner);
+    return;
+  }
+  
+  while(runner->next) {
+    if (runner->next->addr == addr) {
+      tmp = runner->next;
+      runner->next = tmp->next;
+      memdom_free(tmp);
+      tmp = NULL;
+      printf("[%s] Removed block for addr %p\n", __func__, addr);
       break;
     }
-    prev = runner;
     runner = runner->next;
   }
 }
