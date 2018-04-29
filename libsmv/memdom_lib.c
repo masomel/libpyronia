@@ -31,6 +31,8 @@ int memdom_create(){
     memdom[memdom_id]->free_list_head = NULL;
     memdom[memdom_id]->free_list_tail = NULL;
     memdom[memdom_id]->alloc_list = NULL;
+    memdom[memdom_id]->total_mem = 0;
+    memdom[memdom_id]->total_alloc = 0;
     pthread_mutex_init(&memdom[memdom_id]->mlock, NULL);
 
     return memdom_id;
@@ -117,7 +119,6 @@ static void add_new_alloc(struct alloc_record **head, void *addr, unsigned long 
     *head = new_record;
 }
 
-
 void add_new_mmap_block(int memdom_id, void *addr, unsigned long size) {
     pthread_mutex_lock(&memdom[memdom_id]->mlock);
     add_new_alloc(&memdom[memdom_id]->mmap_blocks, addr, size);
@@ -146,26 +147,29 @@ struct alloc_record *find_alloc_record(struct alloc_record *head,
  * address.
  * Note: expects caller to hold the memdom lock.
  */
-void remove_alloc(struct alloc_record *head, void *addr) {
-  struct alloc_record *runner = head, *tmp = NULL;
+void remove_alloc(struct alloc_record **head, void *addr) {
+  struct alloc_record *runner = NULL, *tmp = NULL;
 
-  if (!head)
+  if (*head == NULL)
     return;
 
   // check if first entry is the one we need to remove
-  if (runner && runner->addr == addr) {
-    head = runner->next;
-    memdom_free(runner);
+  if ((*head)->addr == addr) {
+    runner = *head;
+    *head = runner->next;
+    free(runner);
+    runner = NULL;
     return;
   }
 
+  runner = *head;
   while(runner->next) {
     if (runner->next->addr == addr) {
       tmp = runner->next;
       runner->next = tmp->next;
       free(tmp);
       tmp = NULL;
-      break;
+      return;
     }
     runner = runner->next;
   }
@@ -200,6 +204,7 @@ void *memdom_mmap(int memdom_id,
     }
 
     add_new_alloc(&memdom[memdom_id]->mmap_blocks, base, len);
+    memdom[memdom_id]->total_mem += len;
 
     rlog("Memdom ID %d mmaped at %p\n", memdom_id, memdom[memdom_id]->mmap_blocks->addr);
 
@@ -539,7 +544,9 @@ out:
     else{
         /* Record allocated memory in an allocation record for free to
          * use later */
+        memdom[memdom_id]->total_alloc += sz;
         add_new_alloc(&memdom[memdom_id]->alloc_list, memblock, sz);
+	printf("[%s] Total allocation in memdom %d: %lu / %lu\n", __func__, memdom_id, memdom[memdom_id]->total_alloc, memdom[memdom_id]->total_mem);
         rlog("[%s] allocated 0x%lx bytes and returning data addr %p\n", __func__, sz, memblock);
     }
 
@@ -573,6 +580,8 @@ void memdom_free(void* data){
     /* Free the memory */
     rlog("[%s] Freeing 0x%lx bytes at %p in memdom %d\n", __func__, record->size, data, memdom_id);
     memset(data, 0, record->size);
+    memdom[memdom_id]->total_alloc -= record->size;
+    printf("[%s] Total allocation in memdom %d: %lu / %lu\n", __func__, memdom_id, memdom[memdom_id]->total_alloc, memdom[memdom_id]->total_mem);
 
     /* Check if this memory block is adjacent to an extising free list.
      * If so, merge the two, instead of allocating a new free_list. */
@@ -612,7 +621,7 @@ void memdom_free(void* data){
 
  out:
     /* Remove the allocation record */
-    remove_alloc(memdom[memdom_id]->alloc_list, record->addr);
-
+    remove_alloc(&memdom[memdom_id]->alloc_list, record->addr);
+    
     pthread_mutex_unlock(&memdom[memdom_id]->mlock);
 }
