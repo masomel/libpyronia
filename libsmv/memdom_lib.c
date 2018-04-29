@@ -155,7 +155,7 @@ void remove_alloc(struct alloc_record *head, void *addr) {
   // check if first entry is the one we need to remove
   if (runner && runner->addr == addr) {
     head = runner->next;
-    memdom_free(runner);
+    free(runner);
     return;
   }
 
