@@ -230,7 +230,8 @@ int pyr_load_native_lib_isolated(const char *lib) {
 /** Runs the given python function belonging to the given library in
  * in an isolated compartment (i.e. SMV).
  */
-void *pyr_run_native_func_isolated_python(const char *lib, void *(func)(void *, void *), void* self, void *args) {
+void *pyr_run_native_func_isolated_python(char *lib, void *func, void* self,
+                                          void *args, void *kwargs) {
     int smv_id = -1;
     pthread_t tid;
     void *ret = NULL;
@@ -241,6 +242,11 @@ void *pyr_run_native_func_isolated_python(const char *lib, void *(func)(void *, 
     if (smv_id <= pyr_smv_id) {
         goto out;
     }
+
+    wrapper_args = pyr_python_make_wrapper_args(lib, func, self, args, kwargs);
+
+    if (!wrapper_args)
+        goto out;
 
     smvthread_create(smv_id, &tid, pyr_python_func_wrapper, wrapper_args);
     pthread_join(tid, &ret);
@@ -294,6 +300,11 @@ void pyr_exit() {
  */
 pyr_cg_node_t *pyr_collect_runtime_callstack() {
     return runtime->collect_callstack_cb();
+}
+
+/** Getter for the native library contexts */
+pyr_native_ctx_t *pyr_get_native_library_contexts() {
+    return runtime->native_libs;
 }
 
 /* CALLGRAPH ALLOCATION AND FREE */

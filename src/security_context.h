@@ -58,7 +58,9 @@ extern "C" {
                                  void *addr);
     void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr);
     int pyr_find_native_lib_smv(pyr_native_ctx_t *start, const char *lib);
+    void *pyr_alloc_in_native_context(pyr_native_ctx_t *start, const char *lib, size_t size);
     void pyr_security_context_free(struct pyr_security_context **ctxp);
+    extern pyr_native_ctx_t *pyr_get_native_library_contexts(void);
 
 #ifdef __cplusplus
 }

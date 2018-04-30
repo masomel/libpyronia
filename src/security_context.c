@@ -192,6 +192,21 @@ int pyr_find_native_lib_smv(pyr_native_ctx_t *start, const char *lib) {
     return -1;
 }
 
+void *pyr_alloc_in_native_context(pyr_native_ctx_t *start, const char *lib, size_t size) {
+    void *buf = NULL;
+    pyr_native_ctx_t *runner = start;
+
+    while (runner != NULL) {
+        if (!strncmp(runner->library_name, lib, strlen(lib))) {
+            printf("[%s] Found smv %d with access to memdom %d\n", __func__, runner->smv_id, runner->memdom_id);
+            buf = memdom_alloc(runner->memdom_id, size);
+            goto out;
+        }
+    }
+ out:
+    return buf;
+}
+
 static void allocation_record_free(struct allocation_record **rp) {
     struct allocation_record *r = *rp;
 

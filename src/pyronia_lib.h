@@ -28,8 +28,8 @@ extern "C" {
     int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
                         void*(fn)(void*), void* args);
     int pyr_load_native_lib_isolated(const char *lib);
-    void *pyr_run_native_func_isolated(const char *lib,
-                                       void *(*wrapper_func)(void *));
+    void *pyr_run_native_func_isolated_python(char *lib, void *func,
+                                       void *self, void *args, void *kwargs);
     void pyr_exit(void);
 
 #ifdef __cplusplus
