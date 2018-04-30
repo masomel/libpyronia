@@ -39,8 +39,7 @@ static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
  * on dynload time.
  * Note: This function must be called BEFORE the native module
  * is loaded */
-int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
-                               pyr_native_ctx_t *next) {
+int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib) {
     int err = -1;
     pyr_native_ctx_t *c = NULL;
 
@@ -57,7 +56,7 @@ int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
         goto fail;
     }
 
-    c->next = next;
+    c->next = *ctxp;
 
     *ctxp = c;
     return 0;
@@ -97,7 +96,7 @@ void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) 
 
   if (!ctx || !ctx->alloc_blocks)
     return;
-  
+
   runner = ctx->alloc_blocks;
 
   // check if first entry is the one we need to remove
@@ -106,7 +105,7 @@ void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) 
     memdom_free(runner);
     return;
   }
-  
+
   while(runner->next) {
     if (runner->next->addr == addr) {
       tmp = runner->next;
@@ -160,7 +159,7 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     // this list will be added to whenever a new non-builtin extenion
     // is loaded via dlopen
     c->native_libs = NULL;
-    
+
     *ctxp = c;
     return 0;
  fail:

@@ -50,8 +50,7 @@ struct pyr_security_context {
 extern "C" {
 #endif
 
-    int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
-                                   pyr_native_ctx_t *next);
+    int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib);
     int pyr_security_context_alloc(struct pyr_security_context **ctxp,
                                    pyr_cg_node_t *(*collect_callstack_cb)(void));
     int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
