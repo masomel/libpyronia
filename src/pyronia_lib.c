@@ -20,6 +20,7 @@
 #include "serialization.h"
 #include "si_comm.h"
 #include "util.h"
+#include "cpython_exts.h"
 
 static struct pyr_security_context *runtime;
 static pthread_mutex_t security_ctx_mutex;
@@ -123,11 +124,11 @@ int pyr_free_critical_state(void *op) {
 
     if (runtime->interp_dom > 0 && pyr_is_critical_state(op)) {
         pyr_grant_critical_state_write();
-	pthread_mutex_lock(&security_ctx_mutex);
-	pyr_remove_allocation_record(runtime, op);
+        pthread_mutex_lock(&security_ctx_mutex);
+        pyr_remove_allocation_record(runtime, op);
         memdom_free(op);
-	pthread_mutex_unlock(&security_ctx_mutex);
-	printf("[%s] Freed %p\n", __func__, op);
+        pthread_mutex_unlock(&security_ctx_mutex);
+        printf("[%s] Freed %p\n", __func__, op);
         pyr_revoke_critical_state_write();
         return 1;
     }
@@ -147,11 +148,11 @@ int pyr_is_critical_state(void *op) {
     runner = runtime->alloc_blocks;
     while(runner) {
         if (runner->addr == op) {
-	  printf("[%s] Found interpreter memory block for addr %p at %p\n", __func__, runner->addr, runner);
+          printf("[%s] Found interpreter memory block for addr %p at %p\n", __func__, runner->addr, runner);
             ret = 1;
-	    goto out;
+            goto out;
         }
-	runner = runner->next;
+        runner = runner->next;
     }
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -206,7 +207,7 @@ void pyr_revoke_critical_state_write() {
  * to run in the MAIN_THREAD smv.
  */
 int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
-		      void*(fn)(void*), void* args) {
+                      void*(fn)(void*), void* args) {
     int ret = -1;
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #undef pthread_create
@@ -226,12 +227,26 @@ int pyr_load_native_lib_isolated(const char *lib) {
     return 0;
 }
 
-/** Runs the given function belonging to the given library in
+/** Runs the given python function belonging to the given library in
  * in an isolated compartment (i.e. SMV).
  */
-int pyr_run_native_func_isolated(const char *lib, void *(*func)(void)) {
-    // FIXME
-    return 0;
+void *pyr_run_native_func_isolated_python(const char *lib, void *(func)(void *, void *), void* self, void *args) {
+    int smv_id = -1;
+    pthread_t tid;
+    void *ret = NULL;
+    struct python_wrapper_args *wrapper_args = NULL;
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    smv_id = pyr_find_native_lib_smv(runtime->native_libs, lib);
+    if (smv_id <= pyr_smv_id) {
+        goto out;
+    }
+
+    smvthread_create(smv_id, &tid, pyr_python_func_wrapper, wrapper_args);
+    pthread_join(tid, &ret);
+out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+    return ret;
 }
 
 /** Starts the SI listener and dispatch thread.
@@ -240,7 +255,7 @@ void pyr_callstack_req_listen() {
     pthread_attr_t attr;
     int smv_id = -1;
     pthread_t recv_th;
-    
+
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
@@ -256,7 +271,7 @@ void pyr_callstack_req_listen() {
     memdom_priv_add(MAIN_THREAD, smv_id, MEMDOM_READ | MEMDOM_WRITE);
     smv_join_domain(runtime->interp_dom, smv_id);
     memdom_priv_add(runtime->interp_dom, smv_id, MEMDOM_READ | MEMDOM_WRITE);
-    
+
     smvthread_create_attr(smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
 }
 

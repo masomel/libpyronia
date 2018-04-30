@@ -11,6 +11,7 @@
 struct pyr_native_lib_context {
     char *library_name; // runtimes also identify libraries by string name
     int memdom_id; // the memdom this native library belongs to
+    int smv_id; // the smv defining this native library's memdom access
     // points to the next native lib context in the linked list
     struct pyr_native_lib_context *next;
 };
@@ -56,7 +57,7 @@ extern "C" {
     int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
                                  void *addr);
     void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr);
-    int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib);
+    int pyr_find_native_lib_smv(pyr_native_ctx_t *start, const char *lib);
     void pyr_security_context_free(struct pyr_security_context **ctxp);
 
 #ifdef __cplusplus

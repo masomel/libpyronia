@@ -25,11 +25,14 @@ static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
 
     if (c->library_name)
         memdom_free(c->library_name);
-    if (c->memdom_id > 0) {
-        memdom_id = c->memdom_id;
-        memdom_free(c);
-        memdom_kill(memdom_id);
+
+    if (c->smv_id > 0) {
+        smv_kill(c->smv_id);
     }
+    if (memdom_id > 0) {
+        memdom_kill(c->memdom_id);
+    }
+    memdom_free(c);
     *ctxp = NULL;
 }
 
@@ -55,6 +58,14 @@ int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib) {
         err = -EINVAL;
         goto fail;
     }
+
+    c->smv_id = smv_create();
+    if (c->smv_id == -1) {
+        err = -EINVAL;
+        goto fail;
+    }
+    smv_join_domain(c->memdom_id, c->smv_id);
+    memdom_add_priv(c->memdom_id, c->smv_id, MEMDOM_READ | MEMDOM_WRITE);
 
     c->next = *ctxp;
 
@@ -169,13 +180,13 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     return err;
 }
 
-int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib) {
+int pyr_find_native_lib_smv(pyr_native_ctx_t *start, const char *lib) {
     pyr_native_ctx_t *runner = start;
 
     while (runner != NULL) {
         if (!strncmp(runner->library_name, lib, strlen(lib))) {
-            printf("[%s] Found memdom %d\n", __func__, runner->memdom_id);
-            return runner->memdom_id;
+            printf("[%s] Found smv %d with access to memdom %d\n", __func__, runner->smv_id, runner->memdom_id);
+            return runner->smv_id;
         }
     }
     return -1;
