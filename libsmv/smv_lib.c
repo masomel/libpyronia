@@ -198,9 +198,10 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
   /* Atomic operation */
   pthread_mutex_lock(& create_thread_mutex);
 
-  attr1 = *attr;
   if (attr == NULL)
     pthread_attr_init(&attr1);
+  else
+    attr1 = *attr;
 #ifdef THREAD_PRIVATE_STACK // Use private stack for thread
   /* Create a thread-local memdom and make smv join it */
   memdom_id = memdom_create();
