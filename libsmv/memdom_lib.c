@@ -35,6 +35,8 @@ int memdom_create(){
     memdom[memdom_id]->total_alloc = 0;
     pthread_mutex_init(&memdom[memdom_id]->mlock, NULL);
 
+    rlog("[%s] created new memdom with ID %d\n", __func__, memdom_id);
+    
     return memdom_id;
 }
 
@@ -57,6 +59,8 @@ int memdom_kill(int memdom_id){
         return -1;
     }
 
+    rlog("[%s] killing valid memdom %d\n", __func__, memdom_id);
+
     /* Free mmap */
     mmap_block = memdom[memdom_id]->mmap_blocks;
     while (mmap_block) {
@@ -66,13 +70,14 @@ int memdom_kill(int memdom_id){
         }
         mmap_block = mmap_block->next;
     }
+    rlog("[%s] freed all mmap metadata for memdom %d\n", __func__, memdom_id);
 
     /* Free all free_list_struct in this memdom */
     free_list = memdom[memdom_id]->free_list_head;
     while( free_list ) {
         struct free_list_struct *tmp = free_list;
         free_list = free_list->next;
-        rlog("freeing free_list addr: %p, size: 0x%lx bytes\n", tmp->addr, tmp->size);
+        rlog("[%s] freeing free_list addr: %p, size: 0x%lx bytes\n", __func__, tmp->addr, tmp->size);
         free(tmp);
     }
 
@@ -81,12 +86,14 @@ int memdom_kill(int memdom_id){
     while (alloc_list) {
         struct alloc_record *tmp = alloc_list;
         alloc_list = alloc_list->next;
-        rlog("freeing alloc record for addr: %p, size: 0x%lx bytes\n", tmp->addr, tmp->size);
+        rlog("[%s] freeing alloc record for addr: %p, size: 0x%lx bytes\n", __func__, tmp->addr, tmp->size);
         free(tmp);
     }
 
     /* Free memdom metadata */
     free(memdom[memdom_id]);
+
+    rlog("[%s] freed memdom metadata %d\n", __func__, memdom_id);
 
     /* Send kill memdom info to kernel */
     sprintf(buf, "memdom,kill,%d", memdom_id);
@@ -237,7 +244,7 @@ int memdom_priv_add(int memdom_id, int smv_id, unsigned long privs){
         rlog("kernel responded error\n");
         return -1;
     }
-    rlog("smv %d in memdom %d has new privilege after add\n", smv_id, memdom_id);
+    rlog("[%s] smv %d in memdom %d has new privilege after add\n", __func__, smv_id, memdom_id);
     return rv;
 }
 
@@ -251,7 +258,7 @@ int memdom_priv_del(int memdom_id, int smv_id, unsigned long privs){
         rlog("kernel responded error\n");
         return -1;
     }
-    rlog("smv %d in memdom %d has new privilege after delete\n", smv_id, memdom_id);
+    rlog("[%s] smv %d in memdom %d has new privilege after delete\n", __func__, smv_id, memdom_id);
     return rv;
 }
 
@@ -265,7 +272,7 @@ int memdom_main_id(void){
         rlog("kernel responded error\n");
         return -1;
     }
-    rlog("Global memdom id: %d\n", rv);
+    rlog("[%s] Global memdom id: %d\n", __func__, rv);
     return rv;
 }
 

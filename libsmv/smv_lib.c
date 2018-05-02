@@ -11,13 +11,13 @@
 #include <limits.h>
 #include "smv_lib.h"
 
-#define FAMILY_STR "CONTROL_EXMPL"
 #define NL_CMD 1
 #define NL_ATTR 1
 
 pthread_mutex_t create_thread_mutex;
 int ALLOW_GLOBAL; // 1: all threads can access global memdom, 0 otherwise
 
+static char *FAMILY_STR "CONTROL_EXMPL";
 static int nl_sock;
 static int nl_fam;
 static uint32_t port_id;
@@ -62,7 +62,7 @@ int smv_main_init(int global) {
     fprintf(stderr, "smv_main_init() failed\n");
     return -1;
   }
-  rlog("kernel responded %d\n", rv);
+  rlog("[%s] kernel responded %d\n", __func__, rv);
 
   /* Initialize mutex for protecting smv_thread_create */
   pthread_mutex_init(&create_thread_mutex, NULL);
@@ -84,7 +84,7 @@ int smv_create(void) {
     fprintf(stderr, "smv_create() failed\n");
     return -1;
   }
-  rlog("kernel responded smv id %d\n", smv_id);
+  rlog("[%s] kernel responded smv id %d\n", __func__, smv_id);
   return smv_id;
 }
 
@@ -98,7 +98,7 @@ int smv_kill(int smv_id) {
     fprintf(stderr, "smv_kill(%d) failed\n", smv_id);
     return -1;
   }
-  rlog("smv ID %d killed\n", smv_id);
+  rlog("[%s] smv ID %d killed\n", __func__, smv_id);
   return rv;
 }
 
@@ -112,7 +112,7 @@ int smv_join_domain(int memdom_id, int smv_id) {
     fprintf(stderr, "smv_join_domain(smv %d, memdom %d) failed\n", smv_id, memdom_id);
     return -1;
   }
-  rlog("smv ID %d joined memdom ID %d\n", smv_id, memdom_id);
+  rlog("[%s] smv ID %d joined memdom ID %d\n", __func__, smv_id, memdom_id);
   return 0;
 }
 
@@ -126,7 +126,7 @@ int smv_leave_domain(int memdom_id, int smv_id) {
     fprintf(stderr, "smv_leave_domain(smv %d, memdom %d) failed\n", smv_id, memdom_id);
     return -1;
   }
-  rlog("smv ID %d left memdom ID %d\n", smv_id, memdom_id);
+  rlog("[%s] smv ID %d left memdom ID %d\n", __func__, smv_id, memdom_id);
   return rv;
 }
 
@@ -140,7 +140,7 @@ int smv_is_in_domain(int memdom_id, int smv_id) {
     fprintf(stderr, "smv_is_in_domain(smv %d, memdom %d) failed\n", smv_id, memdom_id);
     return -1;
   }
-  rlog("smv ID %d in memdom ID %d?: %d\n", smv_id, memdom_id, rv);
+  rlog("[%s] smv ID %d in memdom ID %d?: %d\n", __func__, smv_id, memdom_id, rv);
   return rv;
 }
 
@@ -155,7 +155,7 @@ int smv_exists(int smv_id) {
     return -1;
   }
 
-  rlog("smv ID %d exists? %d\n", smv_id, rv);
+  rlog("[%s] smv ID %d exists? %d\n", __func__, smv_id, rv);
   return rv;
 }
 
@@ -183,12 +183,16 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
     fprintf(stderr, "creating a new smv %d for the new thread to run in\n", smv_id);
   }
 
+  rlog("[%s] smv = %d\n", __func__, smv_id);
+
   /* Block thread if it tries to run in a non-existing smv */
   if(!smv_exists(smv_id)){
     fprintf(stderr, "thread cannot run in a non-existing smv %d\n", smv_id);
     return -1;
   }
 
+  rlog("[%s] smv %d exists \n", __func__, smv_id);
+  
   /* Join the global memdom if the main thread allows all threads to access the global memory areas */
   if(ALLOW_GLOBAL){
     smv_join_domain(0, smv_id);
@@ -202,6 +206,9 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
     pthread_attr_init(&attr1);
   else
     attr1 = *attr;
+  
+  rlog("[%s] set thread attrs\n", __func__);
+  
 #ifdef THREAD_PRIVATE_STACK // Use private stack for thread
   /* Create a thread-local memdom and make smv join it */
   memdom_id = memdom_create();
@@ -246,6 +253,8 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
     pthread_mutex_unlock(& create_thread_mutex);
     return -1;
   }
+
+  rlog("[%s] registered smv thread for smv %d\n", __func__, smv_id); 
 
 #ifdef INTERCEPT_PTHREAD_CREATE
 #undef pthread_create
