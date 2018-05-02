@@ -12,7 +12,7 @@ cmake_install.cmake
 *.so
 *.vim
 *.[0-9]
-*.*~
+*~
 *.html
 *.log
 *.tmp

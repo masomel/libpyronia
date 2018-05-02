@@ -1,0 +1,10 @@
+#!/bin/bash
+
+./install_testing_deps
+./load_test_profile
+./restart_pyronia
+
+touch /tmp/cam0
+touch /tmp/cam1
+touch /tmp/cam2
+echo "Don't forget to start the test TCP server."

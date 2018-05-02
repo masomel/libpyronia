@@ -1,0 +1,4 @@
+#!/bin/bash
+
+SERVER_DIR=../testsuite
+python $SERVER_DIR/simple_tcp_server.py
