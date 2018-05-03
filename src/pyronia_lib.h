@@ -27,7 +27,8 @@ extern "C" {
     int pyr_free_critical_state(void *op);
     int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
                         void*(fn)(void*), void* args);
-    int pyr_load_native_lib_isolated(const char *lib);
+    int pyr_isolate_native_lib(char *lib);
+    void *pyr_alloc_in_native_compartment(char *lib, size_t size);
     void *pyr_run_native_func_isolated_python(char *lib, void *func,
                                        void *self, void *args, void *kwargs);
     void pyr_exit(void);

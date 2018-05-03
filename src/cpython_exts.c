@@ -10,6 +10,7 @@
 
 #include "cpython_exts.h"
 #include "security_context.h"
+#include "pyronia_lib.h"
 
 /** Wraps the given Python CFunction poitner and arguments to pass them
  * to the thread run function to be run in an isolated compartment.
@@ -27,7 +28,7 @@ struct python_wrapper_args *pyr_python_make_wrapper_args(char *lib, void *func,
         goto out;
     }
 
-    a = pyr_alloc_in_native_context(pyr_get_native_library_contexts(), lib, sizeof(struct python_wrapper_args));
+    a = pyr_alloc_in_native_compartment(lib, sizeof(struct python_wrapper_args));
     if (!a) {
         fprintf(stderr, "[%s] No memory for args\n", __func__);
         goto out;

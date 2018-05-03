@@ -222,9 +222,42 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
 
 /** Loads the given native library into its own memory domain.
  */
-int pyr_load_native_lib_isolated(const char *lib) {
-    // FIXME
-    return 0;
+int pyr_isolate_native_lib(char *lib) {
+    int err = 0;
+
+    pthread_mutex_lock(&security_ctx_mutex);
+
+    // head of runtime native libs list should be this library's
+    err = pyr_new_native_lib_context(&runtime->native_libs, lib);
+    if (err) {
+        printf("[%s] Could not create an isolated compartment for library %s\n", __func__, lib);
+        goto out;
+    }
+
+    // TODO: do we need to do anything else before we leave?
+
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+    return err;
+}
+
+void *pyr_alloc_in_native_compartment(char *lib, size_t size) {
+    void *buf = NULL;
+    int memdom_id = -1;
+    pyr_native_ctx_t *runner = NULL;
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    memdom_id = pyr_find_native_lib_memdom(runtime->native_libs, lib);
+    if (memdom_id == -1) {
+        printf("[%s] Could not find a memory domain for library %s\n", __func__, lib);
+        goto out;
+    }
+
+    buf = memdom_alloc(memdom_id, size);
+
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+    return buf;
 }
 
 /** Runs the given python function belonging to the given library in
@@ -300,11 +333,6 @@ void pyr_exit() {
  */
 pyr_cg_node_t *pyr_collect_runtime_callstack() {
     return runtime->collect_callstack_cb();
-}
-
-/** Getter for the native library contexts */
-pyr_native_ctx_t *pyr_get_native_library_contexts() {
-    return runtime->native_libs;
 }
 
 /* CALLGRAPH ALLOCATION AND FREE */

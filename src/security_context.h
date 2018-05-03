@@ -51,16 +51,15 @@ struct pyr_security_context {
 extern "C" {
 #endif
 
-    int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib);
+    int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, char *lib);
     int pyr_security_context_alloc(struct pyr_security_context **ctxp,
                                    pyr_cg_node_t *(*collect_callstack_cb)(void));
     int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
                                  void *addr);
     void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr);
-    int pyr_find_native_lib_smv(pyr_native_ctx_t *start, const char *lib);
-    void *pyr_alloc_in_native_context(pyr_native_ctx_t *start, const char *lib, size_t size);
+    int pyr_find_native_lib_smv(pyr_native_ctx_t *start, char *lib);
+    int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, char *lib);
     void pyr_security_context_free(struct pyr_security_context **ctxp);
-    extern pyr_native_ctx_t *pyr_get_native_library_contexts(void);
 
 #ifdef __cplusplus
 }

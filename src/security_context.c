@@ -42,7 +42,7 @@ static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
  * on dynload time.
  * Note: This function must be called BEFORE the native module
  * is loaded */
-int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib) {
+int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, char *lib) {
     int err = -1;
     pyr_native_ctx_t *c = NULL;
 
@@ -180,7 +180,7 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     return err;
 }
 
-int pyr_find_native_lib_smv(pyr_native_ctx_t *start, const char *lib) {
+int pyr_find_native_lib_smv(pyr_native_ctx_t *start, char *lib) {
     pyr_native_ctx_t *runner = start;
 
     while (runner != NULL) {
@@ -192,19 +192,16 @@ int pyr_find_native_lib_smv(pyr_native_ctx_t *start, const char *lib) {
     return -1;
 }
 
-void *pyr_alloc_in_native_context(pyr_native_ctx_t *start, const char *lib, size_t size) {
-    void *buf = NULL;
+// loop through our native library list to find the memdom we need to allocate in
+int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, char *lib) {
     pyr_native_ctx_t *runner = start;
-
     while (runner != NULL) {
         if (!strncmp(runner->library_name, lib, strlen(lib))) {
             printf("[%s] Found smv %d with access to memdom %d\n", __func__, runner->smv_id, runner->memdom_id);
-            buf = memdom_alloc(runner->memdom_id, size);
-            goto out;
+            return runner->memdom_id;
         }
     }
- out:
-    return buf;
+    return -1;
 }
 
 static void allocation_record_free(struct allocation_record **rp) {
