@@ -17,14 +17,14 @@
 pthread_mutex_t create_thread_mutex;
 int ALLOW_GLOBAL; // 1: all threads can access global memdom, 0 otherwise
 
-static char *FAMILY_STR "CONTROL_EXMPL";
-static int nl_sock;
+static char *FAMILY_STR = "CONTROL_EXMPL";
 static int nl_fam;
 static uint32_t port_id;
 
 /* libsmv-specific wrapper around send_message in kernel_comm.h */
 int message_to_kernel(char *message) {
-  int err = -1;;
+  int err = -1;
+  int nl_sock;
   nl_sock = create_netlink_socket(0);
   if(nl_sock < 0){
     printf("create netlink socket failure\n");
@@ -42,6 +42,7 @@ int message_to_kernel(char *message) {
  * The master thread must call this routine to notify the kernel its status */
 int smv_main_init(int global) {
   int rv = -1;
+  int nl_sock;
   ALLOW_GLOBAL = 0;
 
   /* Open the netlink socket */
