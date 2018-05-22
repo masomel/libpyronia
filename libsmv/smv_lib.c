@@ -201,15 +201,15 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
   }
 
   /* Atomic operation */
-  pthread_mutex_lock(& create_thread_mutex);
+  pthread_mutex_lock(&create_thread_mutex);
 
   if (attr == NULL)
     pthread_attr_init(&attr1);
-  else
+  else {
     attr1 = *attr;
-  
-  rlog("[%s] set thread attrs\n", __func__);
-  
+    rlog("[%s] set thread attrs %p\n", __func__, &attr1);
+  }
+
 #ifdef THREAD_PRIVATE_STACK // Use private stack for thread
   /* Create a thread-local memdom and make smv join it */
   memdom_id = memdom_create();
@@ -251,8 +251,8 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
   rv = message_to_kernel(buf);
   if(rv != 0){
         fprintf(stderr, "register_smv_thread for smv %d failed\n", smv_id);
-    pthread_mutex_unlock(& create_thread_mutex);
-    return -1;
+        pthread_mutex_unlock(& create_thread_mutex);
+        return -1;
   }
 
   rlog("[%s] registered smv thread for smv %d\n", __func__, smv_id); 
@@ -265,7 +265,7 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
   rv = pthread_create(tid, &attr1, fn, args);
   if(rv){
     fprintf(stderr, "pthread_create for smv %d failed\n", smv_id);
-    pthread_mutex_unlock(& create_thread_mutex);
+    pthread_mutex_unlock(&create_thread_mutex);
     return -1;
   }
   fprintf(stderr, "smv %d is ready to run\n", smv_id);
@@ -281,7 +281,7 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
   /* Main thread should leave the thread's memdom after the setup */
   smv_leave_domain(memdom_id, 0);
 #endif
-  pthread_mutex_unlock(& create_thread_mutex);
+  pthread_mutex_unlock(&create_thread_mutex);
   return smv_id;
 }
 

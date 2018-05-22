@@ -32,7 +32,7 @@ static int is_build = 0;
  * Note: This function revokes access to the interpreter domain at the end.
  */
 int pyr_init(const char *main_mod_path,
-	     const char *lib_policy_file,
+             const char *lib_policy_file,
              pyr_cg_node_t *(*collect_callstack_cb)(void)) {
     int err = 0;
     char *policy = NULL;
@@ -40,7 +40,7 @@ int pyr_init(const char *main_mod_path,
     // We make an exception for setup.py and the sysconfig modules
     // so we don't somehow clobber installs with Pyronia checks
     if (main_mod_path == NULL || !strcmp(main_mod_path, "../setup.py") ||
-	!strcmp(main_mod_path, "sysconfig")) {
+        !strcmp(main_mod_path, "sysconfig")) {
       is_build = 1;
       runtime = NULL;
       return 0;
@@ -74,7 +74,7 @@ int pyr_init(const char *main_mod_path,
         printf("[%s] Runtime initialization failure\n", __func__);
         goto out;
     }
-    
+
     /* Parse the library policy from disk */
     err = pyr_parse_lib_policy(lib_policy_file, &policy);
     if (err < 0) {
@@ -109,14 +109,13 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 
     if (is_build)
       return malloc(size);
-    
+
     if (!runtime || runtime->interp_dom < 1)
         return NULL;
 
     printf("[%s] %lu bytes\n", __func__, size);
 
     pthread_mutex_lock(&security_ctx_mutex);
-
     new_block = memdom_alloc(runtime->interp_dom, size);
     if (!new_block)
         return NULL;
@@ -135,19 +134,19 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
  */
 int pyr_free_critical_state(void *op) {
     if (is_build) {
-	return 0;
+        return 0;
     }
-  
+
     if (!runtime)
         return 0;
 
     if (runtime->interp_dom > 0 && pyr_is_critical_state(op)) {
         pyr_grant_critical_state_write();
-	pthread_mutex_lock(&security_ctx_mutex);
-	pyr_remove_allocation_record(runtime, op);
+        pthread_mutex_lock(&security_ctx_mutex);
+        pyr_remove_allocation_record(runtime, op);
         memdom_free(op);
-	pthread_mutex_unlock(&security_ctx_mutex);
-	printf("[%s] Freed %p\n", __func__, op);
+        pthread_mutex_unlock(&security_ctx_mutex);
+        printf("[%s] Freed %p\n", __func__, op);
         pyr_revoke_critical_state_write();
         return 1;
     }
@@ -167,11 +166,11 @@ int pyr_is_critical_state(void *op) {
     runner = runtime->alloc_blocks;
     while(runner) {
         if (runner->addr == op) {
-	  printf("[%s] Found interpreter memory block for addr %p at %p\n", __func__, runner->addr, runner);
+          printf("[%s] Found interpreter memory block for addr %p at %p\n", __func__, runner->addr, runner);
             ret = 1;
-	    goto out;
+            goto out;
         }
-	runner = runner->next;
+        runner = runner->next;
     }
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -226,7 +225,7 @@ void pyr_revoke_critical_state_write() {
  * to run in the MAIN_THREAD smv.
  */
 int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
-		      void*(fn)(void*), void* args) {
+                      void*(fn)(void*), void* args) {
     int ret = -1;
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #undef pthread_create
@@ -260,7 +259,7 @@ void pyr_callstack_req_listen() {
     pthread_attr_t attr;
     int smv_id = -1;
     pthread_t recv_th;
-    
+
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
@@ -271,14 +270,14 @@ void pyr_callstack_req_listen() {
     }
 
     printf("created smv for listener thread\n");
-    
+
     // we trust this thread, but also, we need this thread to be able
     // to access the functions
     smv_join_domain(MAIN_THREAD, smv_id);
     memdom_priv_add(MAIN_THREAD, smv_id, MEMDOM_READ | MEMDOM_WRITE);
     smv_join_domain(runtime->interp_dom, smv_id);
     memdom_priv_add(runtime->interp_dom, smv_id, MEMDOM_READ | MEMDOM_WRITE);
-    
+
     smvthread_create_attr(smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
 }
 
@@ -286,7 +285,7 @@ void pyr_callstack_req_listen() {
 void pyr_exit() {
     if (is_build)
       return;
-  
+
     int interp_dom = runtime->interp_dom;
 
     printf("[%s] Exiting Pyronia runtime\n", __func__);
