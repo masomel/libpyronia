@@ -13,7 +13,7 @@
 #include <errno.h>
 
 #define MAIN_THREAD 0
-#define NUM_THREADS 500
+#define NUM_THREADS 1024
 
 void *fn(void *args) {
     printf("Hello from smv thread!\n");
@@ -137,9 +137,10 @@ static int test_smvthread_create_max() {
         err = -1;
       }
     }
-
+    
     for (i = 0; i < NUM_THREADS; i++) {
       ret = pthread_join(tid[i], NULL);
+      printf("joined smvthread %d\n", smv_id[i]);
       if (ret) {
 	printf("join %d returned an error: %s\n", i, strerror(errno));
 	err = -1;
@@ -161,14 +162,14 @@ int main(){
     int total_tests = 3;
 
     // single smvthread_create --> expect success
-    /*    if (!test_smvthread_create()) {
+    if (!test_smvthread_create()) {
         success++;
     }
 
     // smvthread_create to run in its own memdom --> expect success
     if (!test_smvthread_own_memdom()) {
         success++;
-	}*/
+    }
     
     // single smvthread_create for max number of smvs --> expect success
     if (!test_smvthread_create_max()) {

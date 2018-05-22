@@ -200,12 +200,41 @@ static int test_smv_exists() {
      return err;
 }
 
+static int test_max_memdom_join() {
+    printf("-- Test: main thread join max memdoms... ");
+    int memdom_id = -1;
+    int i = 0;
+    int j = 0;
+    int err = 0;
+
+    // main thread create memdoms
+    for (i = 0; i < MAX_MEMDOM; i++) {
+        memdom_id = memdom_create();
+	
+        if (memdom_id == -1) {
+            printf("memdom_create returned %d\n", memdom_id);
+            err = -1;
+            goto out;
+        }
+
+	// need to add this domain to the main thread
+	smv_join_domain(memdom_id, MAIN_THREAD);
+	memdom_priv_add(memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+    }
+    
+ out:
+    
+    if (!err)
+        printf("success\n");
+    return err;
+}
+
 int main(){
 
     smv_main_init(0);
 
     int success = 0;
-    int total_tests = 5;
+    int total_tests = 6;
 
     // single smv_create --> expect success
     if (!test_smv_create()) {
@@ -229,6 +258,11 @@ int main(){
 
     // test smv exist queries
     if (!test_smv_exists()) {
+        success++;
+    }
+
+    // test context swithcing between all possible memdoms
+    if (!test_max_memdom_join()) {
         success++;
     }
 
