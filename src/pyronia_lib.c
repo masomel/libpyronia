@@ -24,16 +24,27 @@
 static struct pyr_security_context *runtime;
 static pthread_mutex_t security_ctx_mutex;
 static int pyr_smv_id = -1;
+static int is_build = 0;
 
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
  * channel and initialize the SMV backend.
  * Note: This function revokes access to the interpreter domain at the end.
  */
-int pyr_init(const char *lib_policy_file,
+int pyr_init(const char *main_mod_path,
+	     const char *lib_policy_file,
              pyr_cg_node_t *(*collect_callstack_cb)(void)) {
     int err = 0;
     char *policy = NULL;
+
+    // We make an exception for setup.py and the sysconfig modules
+    // so we don't somehow clobber installs with Pyronia checks
+    if (main_mod_path == NULL || !strcmp(main_mod_path, "../setup.py") ||
+	!strcmp(main_mod_path, "sysconfig")) {
+      is_build = 1;
+      runtime = NULL;
+      return 0;
+    }
 
     /* Register with the memdom subsystem */
     // We don't want the main thread's memdom to be
@@ -57,11 +68,13 @@ int pyr_init(const char *lib_policy_file,
 
     /* Initialize the runtime's security context */
     err = pyr_security_context_alloc(&runtime, collect_callstack_cb);
+    if (!err)
+      err = set_str(main_mod_path, &runtime->main_path);
     if (err) {
         printf("[%s] Runtime initialization failure\n", __func__);
         goto out;
     }
-
+    
     /* Parse the library policy from disk */
     err = pyr_parse_lib_policy(lib_policy_file, &policy);
     if (err < 0) {
@@ -94,6 +107,9 @@ int pyr_init(const char *lib_policy_file,
 void *pyr_alloc_critical_runtime_state(size_t size) {
     void *new_block = NULL;
 
+    if (is_build)
+      return malloc(size);
+    
     if (!runtime || runtime->interp_dom < 1)
         return NULL;
 
@@ -118,6 +134,10 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
  * Returns 1 if the state was freed, 0 otherwise.
  */
 int pyr_free_critical_state(void *op) {
+    if (is_build) {
+	return 0;
+    }
+  
     if (!runtime)
         return 0;
 
@@ -250,6 +270,8 @@ void pyr_callstack_req_listen() {
       return;
     }
 
+    printf("created smv for listener thread\n");
+    
     // we trust this thread, but also, we need this thread to be able
     // to access the functions
     smv_join_domain(MAIN_THREAD, smv_id);
@@ -262,12 +284,17 @@ void pyr_callstack_req_listen() {
 
 /* Do all necessary teardown actions. */
 void pyr_exit() {
+    if (is_build)
+      return;
+  
     int interp_dom = runtime->interp_dom;
 
     printf("[%s] Exiting Pyronia runtime\n", __func__);
 
     pyr_teardown_si_comm();
     pyr_grant_critical_state_write();
+    if (runtime->main_path)
+      pyr_free_critical_state(&runtime->main_path);
     pyr_security_context_free(&runtime);
     memdom_kill(interp_dom);
     pyr_revoke_critical_state_write();

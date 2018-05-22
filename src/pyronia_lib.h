@@ -18,7 +18,8 @@
 extern "C" {
 #endif
 
-    int pyr_init(const char *lib_policy_file,
+    int pyr_init(const char *main_mod_path,
+		 const char *lib_policy_file,
                  pyr_cg_node_t *(*collect_callstack_cb)(void));
     void *pyr_alloc_critical_runtime_state(size_t size);
     int pyr_is_critical_state(void *op);

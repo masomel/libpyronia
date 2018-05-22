@@ -32,6 +32,7 @@ typedef struct pyr_cg_node pyr_cg_node_t;
 /* A language runtime's security context:
  * Used for pyronia-related bookkeeping */
 struct pyr_security_context {
+    char *main_path;
     int interp_dom;
     pyr_native_ctx_t *native_libs;
     /* The runtime may grant write access to the critical state

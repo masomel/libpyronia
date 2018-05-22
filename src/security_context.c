@@ -145,6 +145,7 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
         goto fail;
     }
 
+    c->main_path = NULL;
     c->interp_dom = interp_memdom;
     // this ensures that we really do revoke write access at the end of pyr_init
     c->nested_grants = 1;
@@ -203,7 +204,7 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
         return;
 
     printf("[%s] Freeing security context %p\n", __func__, c);
-
+      
     pyr_native_lib_context_free(&c->native_libs);
     allocation_record_free(&c->alloc_blocks);
 
