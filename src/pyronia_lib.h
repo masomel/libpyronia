@@ -30,6 +30,7 @@ extern "C" {
 			void*(fn)(void*), void* args);
     int pyr_load_native_lib_isolated(const char *lib);
     int pyr_run_native_func_isolated(const char *lib, void *(*func)(void));
+    int pyr_is_interpreter_build(void);
     void pyr_exit(void);
 
 #ifdef __cplusplus

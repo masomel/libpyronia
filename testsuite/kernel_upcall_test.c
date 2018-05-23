@@ -48,16 +48,16 @@ int main (int argc, char *argv[]) {
   int ret = 0;
   int i;
 
+  printf("******* Kernel Upcall Test ********\n");
+  
   init_testlibs();
 
-  ret = pyr_init(LIB_POLICY, test_callgraph_creation);
+  ret = pyr_init("kernel_upcall_test", LIB_POLICY, test_callgraph_creation);
   if (ret) {
     printf("Error initializing Pyronia: %d\n", ret);
     goto out;
   }
-
-  pyr_callstack_req_listen();
-
+  
   printf("---Testing authorized file open\n");
   
   test_type = 0;
@@ -92,5 +92,6 @@ int main (int argc, char *argv[]) {
   ret = test_connect_fail();
   
  out:
+  pyr_exit();
   return ret;
 }

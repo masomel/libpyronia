@@ -74,7 +74,7 @@ int pyr_init(const char *main_mod_path,
         printf("[%s] Runtime initialization failure\n", __func__);
         goto out;
     }
-
+    
     /* Parse the library policy from disk */
     err = pyr_parse_lib_policy(lib_policy_file, &policy);
     if (err < 0) {
@@ -83,7 +83,7 @@ int pyr_init(const char *main_mod_path,
     }
 
     /* Initialize the stack inspection communication channel with
-     * the kernel */
+     * the kernel */ 
     err = pyr_init_si_comm(policy);
     if (err) {
         printf("[%s] SI comm channel initialization failed\n", __func__);
@@ -93,12 +93,14 @@ int pyr_init(const char *main_mod_path,
     pthread_mutex_init(&security_ctx_mutex, NULL);
 
     pyr_callstack_req_listen();
-
  out:
     if (policy)
       pyr_free_critical_state(policy);
     /* Revoke access to the interpreter domain now */
     pyr_revoke_critical_state_write();
+    if (!err)
+      printf("[%s] Initialized pyronia extensions\n", __func__);
+    
     return err;
 }
 
@@ -120,10 +122,10 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
     if (!new_block)
         return NULL;
 
-    if (pyr_add_new_alloc_record(runtime, new_block) == -1) {
-        memdom_free(new_block);
-        new_block = NULL;
-    }
+    /*if (pyr_add_new_alloc_record(runtime, new_block) == -1) {
+      memdom_free(new_block);
+      new_block = NULL;
+      }*/
     pthread_mutex_unlock(&security_ctx_mutex);
 
     return new_block;
@@ -141,13 +143,11 @@ int pyr_free_critical_state(void *op) {
         return 0;
 
     if (runtime->interp_dom > 0 && pyr_is_critical_state(op)) {
-        pyr_grant_critical_state_write();
         pthread_mutex_lock(&security_ctx_mutex);
-        pyr_remove_allocation_record(runtime, op);
+        //pyr_remove_allocation_record(runtime, op);
         memdom_free(op);
         pthread_mutex_unlock(&security_ctx_mutex);
         printf("[%s] Freed %p\n", __func__, op);
-        pyr_revoke_critical_state_write();
         return 1;
     }
     return 0;
@@ -159,11 +159,15 @@ int pyr_free_critical_state(void *op) {
 int pyr_is_critical_state(void *op) {
     struct allocation_record *runner;
     int ret = 0;
+
+    if (is_build)
+        return 0;
+    
     if (!runtime)
         return 0;
 
     pthread_mutex_lock(&security_ctx_mutex);
-    runner = runtime->alloc_blocks;
+    /*runner = runtime->alloc_blocks;
     while(runner) {
         if (runner->addr == op) {
           printf("[%s] Found interpreter memory block for addr %p at %p\n", __func__, runner->addr, runner);
@@ -171,7 +175,8 @@ int pyr_is_critical_state(void *op) {
             goto out;
         }
         runner = runner->next;
-    }
+	}*/
+    ret = (memdom_query_id(op) == runtime->interp_dom);
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
     return ret;
@@ -269,8 +274,6 @@ void pyr_callstack_req_listen() {
       return;
     }
 
-    printf("created smv for listener thread\n");
-
     // we trust this thread, but also, we need this thread to be able
     // to access the functions
     smv_join_domain(MAIN_THREAD, smv_id);
@@ -281,6 +284,10 @@ void pyr_callstack_req_listen() {
     smvthread_create_attr(smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
 }
 
+int pyr_is_interpreter_build() {
+  return is_build;
+}
+
 /* Do all necessary teardown actions. */
 void pyr_exit() {
     if (is_build)
@@ -289,11 +296,10 @@ void pyr_exit() {
     int interp_dom = runtime->interp_dom;
 
     printf("[%s] Exiting Pyronia runtime\n", __func__);
-
     pyr_teardown_si_comm();
     pyr_grant_critical_state_write();
     if (runtime->main_path)
-      pyr_free_critical_state(&runtime->main_path);
+      pyr_free_critical_state(runtime->main_path);
     pyr_security_context_free(&runtime);
     memdom_kill(interp_dom);
     pyr_revoke_critical_state_write();

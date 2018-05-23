@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <pthread.h>
 #include "smv_lib.h"
 #include "kernel_comm.h"
@@ -18,8 +19,9 @@
 /* MMAP flag for memdom protected area */
 #define MAP_MEMDOM      0x00800000
 
-/* Maximum heap size a memdom can use */
-#define MEMDOM_HEAP_SIZE 0x1000 // 4K
+/* Maximum heap size a memdom can use: 1GB */
+//#define MEMDOM_HEAP_SIZE 0x40000000
+#define MEMDOM_HEAP_SIZE 0x1000
 
 /* Maximum number of memdoms a thread can have: 1024*/
 #define MAX_MEMDOM 1024
@@ -38,19 +40,18 @@
  * memdom_free() inserts free list to the head of the free list
  */
 struct free_list_struct {
-    void *addr;
-    unsigned long size;
-    struct free_list_struct *next;
+  void *addr;
+  unsigned long size;
+  struct free_list_struct *next;
 };
 
-/* The allocator keeps this metadata structure for every allocated chunk of 
- * memdom-protected memory. memdom_free removes this struct and inserts a
- * corresponding free_list.
+/* Every allocated chunk of memory has this block header to record the required
+ * metadata for the allocator to free memory
  */
-struct alloc_record {
-    void *addr;
-    unsigned long size;
-    struct alloc_record *next;
+struct block_header_struct {
+  void *addr;
+  int memdom_id;
+  unsigned long size;
 };
 
 /* Memory domain metadata structure
@@ -60,61 +61,56 @@ struct alloc_record {
  * area and update related metadata fields.
  */
 struct memdom_metadata_struct {
-    int memdom_id;
-    struct alloc_record *mmap_blocks; // formerly single start and total_size
-    struct free_list_struct *free_list_head;
-    struct free_list_struct *free_list_tail;
-    struct alloc_record *alloc_list;
-    unsigned long total_mem;
-    unsigned long total_alloc;
-    pthread_mutex_t mlock;  // protects this memdom in sn SMP environment
+  int memdom_id;
+  void *start;    // start of this memdom's addr (inclusive)
+  unsigned long total_size; // the total memory size of this memdom
+  struct free_list_struct *free_list_head;
+  struct free_list_struct *free_list_tail;
+  pthread_mutex_t mlock;  // protects this memdom in sn SMP environment
 };
 extern struct memdom_metadata_struct *memdom[MAX_MEMDOM];
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+  #endif
 
-/* Create memory domain and return it to user */
-int memdom_create(void);
+  /* Create memory domain and return it to user */
+  int memdom_create(void);
 
-/* Remove memory domain memdom from kernel */
-int memdom_kill(int memdom_id);
+  /* Remove memory domain memdom from kernel */
+  int memdom_kill(int memdom_id);
 
-/* Allocate memory region in memory domain memdom */
-void *memdom_mmap(int memdom_id,
-                  unsigned long addr, unsigned long len,
-                  unsigned long prot, unsigned long flags,
-                  unsigned long fd, unsigned long pgoff);
+  /* Allocate memory region in memory domain memdom */
+  void *memdom_mmap(int memdom_id,
+		    unsigned long addr, unsigned long len,
+		    unsigned long prot, unsigned long flags,
+		    unsigned long fd, unsigned long pgoff);
 
-/* Allocate npages pages in memory domain memdom */
-void *memdom_alloc(int memdom_id, unsigned long nbytes);
+  /* Allocate npages pages in memory domain memdom */
+  void *memdom_alloc(int memdom_id, unsigned long nbytes);
 
-/* Deallocate npages pages in memory domain memdom */
-void memdom_free(void* data);
+  /* Deallocate npages pages in memory domain memdom */
+  void memdom_free(void* data);
 
-/* Return privilege status of smv rib in memory domain memdom */
-unsigned long memdom_priv_get(int memdom_id, int smv_id);
+  /* Return privilege status of smv rib in memory domain memdom */
+  unsigned long memdom_priv_get(int memdom_id, int smv_id);
 
-/* Add privilege of smv rib in memory domain memdom */
-int memdom_priv_add(int memdom_id, int smv_id, unsigned long privs);
+  /* Add privilege of smv rib in memory domain memdom */
+  int memdom_priv_add(int memdom_id, int smv_id, unsigned long privs);
 
-/* Delete privilege of smv rib in memory domain memdom */
-int memdom_priv_del(int memdom_id, int smv_id, unsigned long privs);
+  /* Delete privilege of smv rib in memory domain memdom */
+  int memdom_priv_del(int memdom_id, int smv_id, unsigned long privs);
 
-/* Get the memdom id for global memory used by main thread */
-int memdom_main_id(void);
+  /* Get the memdom id for global memory used by main thread */
+  int memdom_main_id(void);
 
-/* Get the memdom id for a memory address */
-int memdom_query_id(void *obj);
+  /* Get the memdom id for a memory address */
+  int memdom_query_id(void *obj);
 
-/* Get the calling thread's default memdom id */
-int memdom_private_id(void);
+  /* Get the calling thread's default memdom id */
+  int memdom_private_id(void);
 
-/* Keep track of a new mmap'd block for the given memry domain */
-void add_new_mmap_block(int memdom_id, void *addr, unsigned long size);
-
-#ifdef __cplusplus
+  #ifdef __cplusplus
 }
 #endif
 

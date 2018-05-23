@@ -28,15 +28,15 @@ int main (int argc, char *argv[]) {
   int ret = 0;
   int i;
 
+  printf("******* File Access Test ********\n");
+  
   init_testlibs();
 
-  ret = pyr_init(LIB_POLICY, test_callgraph_creation);
+  ret = pyr_init("file_access_test", LIB_POLICY, test_callgraph_creation);
   if (ret) {
     printf("Error initializing Pyronia: %d\n", ret);
     goto out;
   }
-
-  pyr_callstack_req_listen();
   
   ret = test_file_open_name("/tmp/cam0");
   if (ret)

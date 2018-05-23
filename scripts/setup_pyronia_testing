@@ -1,8 +1,10 @@
 #!/bin/bash
 
-./install_testing_deps
-./load_test_profile
-./restart_pyronia
+#./install_testing_deps
+./load_test_profiles
+#./restart_pyronia
+
+ulimit -c unlimited
 
 touch /tmp/cam0
 touch /tmp/cam1
