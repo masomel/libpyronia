@@ -66,6 +66,8 @@ struct memdom_metadata_struct {
   unsigned long total_size; // the total memory size of this memdom
   struct free_list_struct *free_list_head;
   struct free_list_struct *free_list_tail;
+  int cur_alloc;
+  int max_alloc;
   pthread_mutex_t mlock;  // protects this memdom in sn SMP environment
 };
 extern struct memdom_metadata_struct *memdom[MAX_MEMDOM];

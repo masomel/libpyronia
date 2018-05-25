@@ -22,7 +22,6 @@
 #include "util.h"
 
 static struct pyr_security_context *runtime;
-static pthread_mutex_t security_ctx_mutex;
 static int pyr_smv_id = -1;
 static int is_build = 0;
 
@@ -46,6 +45,12 @@ int pyr_init(const char *main_mod_path,
       return 0;
     }
 
+    pthread_mutex_init(&security_ctx_mutex, NULL);
+    pthread_cond_init (&si_cond_var, NULL);
+    // we really only have one thread right now,
+    // so it's ok to set this without locks
+    is_inspecting_stack = 1;
+    
     /* Register with the memdom subsystem */
     // We don't want the main thread's memdom to be
     // globally accessible, so init with 0.
@@ -65,7 +70,7 @@ int pyr_init(const char *main_mod_path,
     // We need this SMV to be able to access any Python functions
     smv_join_domain(MAIN_THREAD, pyr_smv_id);
     memdom_priv_add(MAIN_THREAD, pyr_smv_id, MEMDOM_READ | MEMDOM_WRITE);
-
+    
     /* Initialize the runtime's security context */
     err = pyr_security_context_alloc(&runtime, collect_callstack_cb);
     if (!err)
@@ -79,7 +84,7 @@ int pyr_init(const char *main_mod_path,
     err = pyr_parse_lib_policy(lib_policy_file, &policy);
     if (err < 0) {
       printf("[%s] Parsing lib policy failure: %d\n", __func__, err);
-        goto out;
+      goto out;
     }
 
     /* Initialize the stack inspection communication channel with
@@ -90,9 +95,8 @@ int pyr_init(const char *main_mod_path,
         goto out;
     }
 
-    pthread_mutex_init(&security_ctx_mutex, NULL);
-
     pyr_callstack_req_listen();
+    pyr_is_inspecting(); // we want to wait for the listener to be ready
  out:
     if (policy)
       pyr_free_critical_state(policy);
@@ -100,15 +104,13 @@ int pyr_init(const char *main_mod_path,
     pyr_revoke_critical_state_write();
     if (!err)
       printf("[%s] Initialized pyronia extensions\n", __func__);
-    
     return err;
 }
 
 /** Wrapper around memdom_alloc in the interpreter domain.
  */
 void *pyr_alloc_critical_runtime_state(size_t size) {
-    void *new_block = NULL;
-
+    void *new_block = NULL;    
     if (is_build)
       return malloc(size);
 
@@ -119,15 +121,7 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 
     pthread_mutex_lock(&security_ctx_mutex);
     new_block = memdom_alloc(runtime->interp_dom, size);
-    if (!new_block)
-        return NULL;
-
-    /*if (pyr_add_new_alloc_record(runtime, new_block) == -1) {
-      memdom_free(new_block);
-      new_block = NULL;
-      }*/
     pthread_mutex_unlock(&security_ctx_mutex);
-
     return new_block;
 }
 
@@ -144,7 +138,6 @@ int pyr_free_critical_state(void *op) {
 
     if (runtime->interp_dom > 0 && pyr_is_critical_state(op)) {
         pthread_mutex_lock(&security_ctx_mutex);
-        //pyr_remove_allocation_record(runtime, op);
         memdom_free(op);
         pthread_mutex_unlock(&security_ctx_mutex);
         printf("[%s] Freed %p\n", __func__, op);
@@ -167,17 +160,7 @@ int pyr_is_critical_state(void *op) {
         return 0;
 
     pthread_mutex_lock(&security_ctx_mutex);
-    /*runner = runtime->alloc_blocks;
-    while(runner) {
-        if (runner->addr == op) {
-          printf("[%s] Found interpreter memory block for addr %p at %p\n", __func__, runner->addr, runner);
-            ret = 1;
-            goto out;
-        }
-        runner = runner->next;
-	}*/
     ret = (memdom_query_id(op) == runtime->interp_dom);
- out:
     pthread_mutex_unlock(&security_ctx_mutex);
     return ret;
 }
@@ -185,14 +168,18 @@ int pyr_is_critical_state(void *op) {
 /** Grants the main thread write access to the interpreter domain.
  */
 void pyr_grant_critical_state_write() {
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+
+    pthread_mutex_lock(&security_ctx_mutex);
     // let's skip adding write privs if our runtime
     // doesn't have a domain or our domain is invalid
     if (!runtime || runtime->interp_dom < 1) {
+        pthread_mutex_unlock(&security_ctx_mutex);
         return;
     }
 
-    pthread_mutex_lock(&security_ctx_mutex);
-
+    //pthread_mutex_lock(&security_ctx_mutex);
     // slight optimization: if we've already granted access
     // let's avoid another downcall to change the memdom privileges
     // and simply keep track of how many times we've granted access
@@ -207,13 +194,20 @@ void pyr_grant_critical_state_write() {
 /** Revokes the main thread's write privileges to the interpreter domain.
  */
 void pyr_revoke_critical_state_write() {
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+
+    pthread_mutex_lock(&security_ctx_mutex);
     // let's skip adding write privs if our runtime
     // doesn't have a domain or our domain is invalid
     if (!runtime || runtime->interp_dom < 1) {
+        pthread_mutex_unlock(&security_ctx_mutex);
         return;
     }
 
-    pthread_mutex_lock(&security_ctx_mutex);
+    printf("[%s] Number of grants: %d\n", __func__, runtime->nested_grants);
+    
+    //pthread_mutex_lock(&security_ctx_mutex);
     runtime->nested_grants--;
 
     // same optimization as above
@@ -235,10 +229,15 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #undef pthread_create
 #endif
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+
+    pthread_mutex_lock(&security_ctx_mutex);
     ret = smvthread_create_attr(pyr_smv_id, tid, attr, fn, args);
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #define pthread_create(tid, attr, fn, args) pyr_thread_create(tid, attr, fn, args)
 #endif
+    pthread_mutex_unlock(&security_ctx_mutex);
     printf("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
     return ret;
 }
@@ -290,8 +289,12 @@ int pyr_is_interpreter_build() {
 
 /* Do all necessary teardown actions. */
 void pyr_exit() {
-    if (is_build)
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+  
+    if (is_build) {
       return;
+    }
 
     int interp_dom = runtime->interp_dom;
 
@@ -310,7 +313,9 @@ void pyr_exit() {
  * to be called by the si_comm component in handle_callstack_request.
  */
 pyr_cg_node_t *pyr_collect_runtime_callstack() {
-    return runtime->collect_callstack_cb();
+    pyr_cg_node_t *cg = NULL;
+    cg = runtime->collect_callstack_cb();
+    return cg;
 }
 
 /* CALLGRAPH ALLOCATION AND FREE */

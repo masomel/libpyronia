@@ -11,6 +11,13 @@
 
 #define FAMILY_STR "SI_COMM"
 
+// let's place these here since they're really
+// only shared between the main library API and the
+// SI comm channel
+pthread_mutex_t security_ctx_mutex;
+pthread_cond_t si_cond_var;
+int is_inspecting_stack;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -20,6 +27,7 @@ extern "C" {
     void pyr_teardown_si_comm(void);
     void *pyr_recv_from_kernel(void *args);
     void pyr_callstack_req_listen(void);
+    void pyr_is_inspecting(void);
 
 #ifdef __cplusplus
 }

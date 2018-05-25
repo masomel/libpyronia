@@ -31,6 +31,8 @@ int memdom_create(){
   memdom[memdom_id]->total_size = 0;
   memdom[memdom_id]->free_list_head = NULL;
   memdom[memdom_id]->free_list_tail = NULL;
+  memdom[memdom_id]->cur_alloc = 0;
+  memdom[memdom_id]->max_alloc = 0;
   pthread_mutex_init(&memdom[memdom_id]->mlock, NULL);
 
   return memdom_id;
@@ -53,6 +55,8 @@ int memdom_kill(int memdom_id){
     fprintf(stderr, "memdom_kill(%d) failed\n", memdom_id);
     return -1;
   }
+
+  printf("Max allocation: %d bytes\n", memdom[memdom_id]->max_alloc);
 
   /* Free mmap */
   if( memdom[memdom_id]->start ) {
@@ -337,6 +341,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
       memdom[memdom_id]->free_list_tail = NULL;
       rlog("[%s] free_list size is 0, freed this free_list_struct, the next allocate should request from free_list_head\n", __func__);
     }
+    printf("going to out\n");
     goto out;
   }
 
@@ -401,6 +406,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
     fprintf(stderr, "memdom_alloc failed: no memory can be allocated in memdom %d\n", memdom_id);
   }
   else{
+    printf("allocating block header\n");
     /* Record allocated memory in the block header for free to use later */
     struct block_header_struct header;
     header.addr = (void*)memblock;
@@ -409,8 +415,12 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
     memcpy(memblock, &header, sizeof(struct block_header_struct));
     memblock = memblock + sizeof(struct block_header_struct);
     rlog("[%s] header: addr %p, allocated 0x%lx bytes and returning data addr %p\n", __func__, header.addr, sz, memblock);
+    memdom[memdom_id]->cur_alloc += (header.size + sizeof(struct block_header_struct));
+    if (memdom[memdom_id]->cur_alloc > memdom[memdom_id]->max_alloc)
+      memdom[memdom_id]->max_alloc = memdom[memdom_id]->cur_alloc;
+    rlog("Current allocations: %d bytes\n", memdom[memdom_id]->cur_alloc);
   }
-
+  printf("unlock memdom mutex\n");
   pthread_mutex_unlock(&memdom[memdom_id]->mlock);
   return (void*)memblock;
 }
@@ -421,6 +431,10 @@ void memdom_free(void* data){
   char *memblock = NULL;
   int memdom_id = -1;
 
+  if (memdom_query_id(data) == -1) {
+    rlog("[%s] Data block at %p not in memdom\n", __func__, data);
+  }
+  
   /* Read the header stored ahead of the actual data */
   memblock = (char*) data - sizeof(struct block_header_struct);
   memcpy(&header, memblock, sizeof(struct block_header_struct));
@@ -446,6 +460,9 @@ void memdom_free(void* data){
   free_list->size = header.size;
   free_list->next = NULL;
 
+  memdom[memdom_id]->cur_alloc -= (header.size + sizeof(struct block_header_struct));
+  printf("Current allocations: %d bytes\n", memdom[memdom_id]->cur_alloc);
+  
   /* Insert the block into free list head */
   free_list_insert_to_head(header.memdom_id, free_list);
 

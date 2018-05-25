@@ -47,8 +47,14 @@ static int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
 void *pyr_recv_from_kernel(void *args) {
   int err = 0;
 
+  printf("%s\n", __func__);
+  
   while(1) {
     printf("[%s] Listening at port %d\n", __func__, si_port);
+    pthread_mutex_lock(&security_ctx_mutex);
+    is_inspecting_stack = 0;
+    pthread_cond_broadcast(&si_cond_var);
+    pthread_mutex_unlock(&security_ctx_mutex);
 
     // Receive messages
     err = nl_recvmsgs_default(si_sock);
@@ -76,41 +82,59 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
 
     printf("[%s] The kernel module sent a message.\n", __func__);
 
+    // the condition will be set to false at the top of the
+    // recv loop (i.e. after this function returns)
+    pthread_mutex_lock(&security_ctx_mutex);
+    is_inspecting_stack = 1;
+    pthread_mutex_unlock(&security_ctx_mutex);
+
+    printf("parsing header\n");
+    
     nl_hdr = nlmsg_hdr(msg);
     genl_hdr = genlmsg_hdr(nl_hdr);
 
     if (genl_hdr->cmd != SI_COMM_C_STACK_REQ) {
       printf("[%s] Unsupported command %d\n", __func__, genl_hdr->cmd);
-        return 0;
+      err = 0;
+      goto out;
     }
+
+    printf("parsing genl header\n");
 
     err = genlmsg_parse(nl_hdr, 0, attrs, SI_COMM_A_MAX, si_comm_genl_policy);
     if (err)
-      return err;
+      goto out;
 
+    printf("parsing attributes\n");
+    
     // ignore any attributes other than the KERN_REQ
     if (attrs[SI_COMM_A_KERN_REQ]) {
         reqp = (uint8_t *)nla_data(attrs[SI_COMM_A_KERN_REQ]);
         if (*reqp != STACK_REQ_CMD) {
           printf("[%s] Unexpected kernel message: %u\n", __func__, *reqp);
-            return -1;
+	  err = -1;
+	  goto out;
         }
     }
     else {
       printf("[%s] Null message from the kernel message\n", __func__);
-        return -1;
+      err = -1;
+      goto out;
     }
 
+    printf("collecting callstack\n");
+    
     // Collect and serialize the callstack
     callstack = pyr_collect_runtime_callstack();
+    printf("serializing callstack\n");
     err = pyr_serialize_callstack(&callstack_str, callstack);
     if (err > 0) {
         printf("[%s] Sending serialized callstack %s (%d bytes) to kernel\n", __func__, callstack_str, err);
     }
-
-    err = pyr_to_kernel(SI_COMM_C_STACK_REQ, SI_COMM_A_USR_MSG, callstack_str);
-
+    
  out:
+    printf("in out\n");
+    err = pyr_to_kernel(SI_COMM_C_STACK_REQ, SI_COMM_A_USR_MSG, callstack_str);
     if (callstack)
         pyr_free_callgraph(&callstack);
     if (callstack_str)
@@ -192,8 +216,22 @@ int pyr_init_si_comm(char *policy) {
 }
 
 void pyr_teardown_si_comm() {
+    pyr_is_inspecting();
+    pthread_mutex_lock(&security_ctx_mutex);
     if (si_sock) {
         printf("[%s] Closing the SI socket\n", __func__);
         nl_socket_free(si_sock);
     }
+    pthread_mutex_unlock(&security_ctx_mutex);
+}
+
+// mutex must be unlocked by caller
+void pyr_is_inspecting(void) {
+  pthread_mutex_lock(&security_ctx_mutex);
+  while (is_inspecting_stack) {
+    printf("Waiting for stack inspector to finish\n");
+    pthread_cond_wait(&si_cond_var, &security_ctx_mutex);
+    printf("Stack inspector signalled\n");
+  }
+  pthread_mutex_unlock(&security_ctx_mutex);
 }

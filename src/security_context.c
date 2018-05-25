@@ -138,12 +138,16 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
 
     // we want this to be allocated in the interpreter memdom
+    c = malloc(sizeof(struct pyr_security_context));
+    if (!c)
+      goto fail;
+    /*
     c = memdom_alloc(interp_memdom, sizeof(struct pyr_security_context));
     if (!c) {
         printf("[%s] No memory for runtime security context\n", __func__);
         err = -ENOMEM;
         goto fail;
-    }
+	}*/
 
     c->main_path = NULL;
     c->interp_dom = interp_memdom;
@@ -151,11 +155,11 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     c->nested_grants = 1;
     c->alloc_blocks = NULL;
 
-    if (!collect_callstack_cb) {
+    /*if (!collect_callstack_cb) {
         printf("[%s] Need non-null callstack collect callback\n", __func__);
         err = -EINVAL;
         goto fail;
-    }
+	}*/
     c->collect_callstack_cb = collect_callstack_cb;
 
     // this list will be added to whenever a new non-builtin extenion
@@ -166,7 +170,8 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     return 0;
  fail:
     if (c)
-        memdom_free(c);
+      //memdom_free(c);
+      free(c);
     *ctxp = NULL;
     return err;
 }
@@ -210,6 +215,7 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
 
     printf("[%s] Freed all native libs\n", __func__);
 
-    memdom_free(c);
+    //memdom_free(c);
+    free(c);
     *ctxp = NULL;
 }
