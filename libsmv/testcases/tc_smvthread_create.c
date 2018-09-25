@@ -9,7 +9,7 @@
 #include <smv_lib.h>
 #include <memdom_lib.h>
 #include <pthread.h>
-#define NUM_THREADS 1024
+#define NUM_THREADS 10
 
 // Thread stack for creating smvs
 // Each thread write to 1 page

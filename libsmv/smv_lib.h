@@ -13,7 +13,7 @@
 #define __SOURCEFILE__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define rlog(format, ...) { \
     if( LOGGING ) { \
-        fprintf(stdout, "[smv] " format, ##__VA_ARGS__); \
+        fprintf(stdout, "[smv-pyr] " format, ##__VA_ARGS__); \
         fflush(NULL);   \
     }\
 }
@@ -59,6 +59,9 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
   
 /* Check whether a smv exists */
 int smv_exists(int smv_id);
+
+/* Get the smv ID of the current thread */
+int smvthread_get_id(void);
 
 #ifdef __cplusplus
 }

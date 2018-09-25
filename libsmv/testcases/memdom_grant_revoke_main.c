@@ -25,7 +25,7 @@ static void *memdom_write_trigger(char *buf) {
 
 int main(){
   
-    printf("-- Test: thread memdom grant-revoke write fault... ");
+    printf("-- Test: thread memdom grant-revoke main fault... ");
     int memdom_id = -1;
     int err = 0;
     pthread_t tid1, tid2;

@@ -268,7 +268,6 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
     pthread_mutex_unlock(&create_thread_mutex);
     return -1;
   }
-  fprintf(stderr, "smv %d is ready to run\n", smv_id);
 
 #ifdef INTERCEPT_PTHREAD_CREATE
   /* Set return value to 0 to avoid pthread_create error */
@@ -282,6 +281,7 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
   smv_leave_domain(memdom_id, 0);
 #endif
   pthread_mutex_unlock(&create_thread_mutex);
+  fprintf(stderr, "smv %d is ready to run\n", smv_id);
   return smv_id;
 }
 
@@ -290,4 +290,18 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
  */
 int smvthread_create(int smv_id, pthread_t* tid, void*(fn)(void*), void* args) {
   return smvthread_create_attr(smv_id, tid, NULL, fn, args);
+}
+
+int smvthread_get_id() {
+  int rv = 0;
+  char buf[50];
+  sprintf(buf, "smv,getsmvid");
+  rv = message_to_kernel(buf);
+  if (rv == -1) {
+    fprintf(stderr, "smvthread_get_id() failed\n");
+    return -1;
+  }
+
+  rlog("[%s] current smv ID: %d\n", __func__, rv);
+  return rv;
 }
