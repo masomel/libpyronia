@@ -14,9 +14,9 @@
 // let's place these here since they're really
 // only shared between the main library API and the
 // SI comm channel
-pthread_mutex_t security_ctx_mutex;
-pthread_cond_t si_cond_var;
-int is_inspecting_stack;
+extern pthread_mutex_t security_ctx_mutex;
+extern pthread_cond_t si_cond_var;
+extern int is_inspecting_stack;
 
 #ifdef __cplusplus
 extern "C" {
