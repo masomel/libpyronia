@@ -20,7 +20,7 @@ static void *memdom_read_trigger(void *buf) {
 
 int main(){
   
-    printf("-- Test: thread memdom read fault... ");
+    printf("-- Test: thread memdom read fault... \n");
     int memdom_id = -1;
     int smv_id = -1;
     int err = -1;

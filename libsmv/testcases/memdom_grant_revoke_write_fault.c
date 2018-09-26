@@ -20,7 +20,7 @@ static void *memdom_write_trigger(char *buf) {
 
 int main(){
   
-    printf("-- Test: thread memdom grant-revoke write fault... ");
+    printf("-- Test: thread memdom grant-revoke write fault... \n");
     int memdom_id = -1;
     int smv_id = -1;
     int err = 0;

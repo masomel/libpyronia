@@ -2,10 +2,14 @@
 
 SRCDIR=../testsuite
 
+rm $HOME/*_test
+
 gcc -g $SRCDIR/kernel_upcall_test.c -o $HOME/kernel_upcall_test -lpyronia -lsmv
 gcc -g $SRCDIR/file_access_test.c -o $HOME/file_access_test -lpyronia -lsmv
 gcc -g $SRCDIR/network_access_test.c -o $HOME/network_access_test -lpyronia -lsmv
 gcc -g $SRCDIR/callgraph_perms_fail_test.c -o $HOME/callgraph_perms_fail_test -lpyronia -lsmv
+gcc -g $SRCDIR/critical_state_alloc_test.c -o $HOME/critical_state_alloc_test -lpyronia -lsmv
+gcc -g $SRCDIR/si_thread_test.c -o $HOME/si_thread_test -lpyronia -lsmv -pthread
 
 cd $HOME
 

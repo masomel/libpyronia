@@ -50,7 +50,7 @@ then
     gcc -g $SRCDIR/memdom_grant_revoke_main.c -o $HOME/memdom_grant_revoke_main_test -lsmv -lpthread
     gcc -g $SRCDIR/smvthread_multi_fault.c -o $HOME/smvthread_multi_fault_test -lsmv -lpthread
     gcc -g $SRCDIR/per_smv_memdom_fault.c -o $HOME/per_smv_memdom_fault_test -lsmv -lpthread
-    
+ 
 cd $HOME
 echo "*** Running Page Fault Tests***"
 ./memdom_no_privs_test

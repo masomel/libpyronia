@@ -17,6 +17,7 @@
 #include <netlink/genl/ctrl.h>
 #include <linux/pyronia_netlink.h>
 #include <memdom_lib.h>
+#include <pthread.h>
 
 #include "pyronia_lib.h"
 #include "si_comm.h"
@@ -46,10 +47,12 @@ static int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
 // so just make the function signature fit what pthread_create expects
 void *pyr_recv_from_kernel(void *args) {
   int err = 0;
+
+  pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0);
   
-  while(1) {
+  while(true) {
     pthread_mutex_lock(&security_ctx_mutex);
-    is_inspecting_stack = 0;
+    is_inspecting_stack = false;
     pthread_cond_broadcast(&si_cond_var);
     pthread_mutex_unlock(&security_ctx_mutex);
     rlog("[%s] Listening at port %d\n", __func__, si_port);
@@ -83,7 +86,7 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
     // the condition will be set to false at the top of the
     // recv loop (i.e. after this function returns)
     pthread_mutex_lock(&security_ctx_mutex);
-    is_inspecting_stack = 1;
+    is_inspecting_stack = true;
     pthread_mutex_unlock(&security_ctx_mutex);
     
     nl_hdr = nlmsg_hdr(msg);
@@ -128,7 +131,6 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
     if (callstack_str)
         pyr_free_critical_state(callstack_str);
     return err;
-
 }
 
 static int init_si_socket() {

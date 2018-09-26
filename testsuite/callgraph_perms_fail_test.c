@@ -75,7 +75,8 @@ int main (int argc, char *argv[]) {
   
   test_type = 1;
   ret = test_file_open();
-  
+
  out:
+  pyr_exit();
   return ret;
 }

@@ -8,6 +8,7 @@
 /lib/x86_64-linux-gnu/libnl-genl-3.so.200.22.0 rm,
 /lib/x86_64-linux-gnu/libnl-3.so.200.22.0 rm,
 /lib/x86_64-linux-gnu/libm-2.23.so rm,
+/lib/x86_64-linux-gnu/libgcc_s.so.1 rm,
 /proc/*/net/psched r,
 /dev/pts/* r,
 /home/pyronia/libpyronia/testsuite/home.pyronia.callgraph_perms_fail_test-lib.prof r,

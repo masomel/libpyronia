@@ -20,7 +20,7 @@ static void *memdom_read_trigger(void *buf) {
 }
 
 int main(){
-  printf("-- Test: per smv thread memdom access fault... ");
+  printf("-- Test: per smv thread memdom access fault... \n");
     int i = 0;
     int rv = 0;
     int smv_id[NUM_THREADS];

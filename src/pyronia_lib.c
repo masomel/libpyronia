@@ -26,10 +26,6 @@ static int pyr_smv_id = -1;
 static int is_build = 0;
 static pthread_t recv_th;
 
-pthread_mutex_t security_ctx_mutex;
-pthread_cond_t si_cond_var;
-int is_inspecting_stack = 1;
-
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
  * channel and initialize the SMV backend.
@@ -42,6 +38,7 @@ int pyr_init(const char *main_mod_path,
     char *policy = NULL;
     pthread_mutexattr_t attr;
 
+    is_inspecting_stack = true;
     rlog("[%s] Initializing pyronia for module %s\n", __func__, main_mod_path);
 
     // We make an exception for setup.py and the sysconfig modules
@@ -270,7 +267,7 @@ void pyr_callstack_req_listen() {
 
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-
+    
     smv_id = smv_create();
     if (smv_id == -1) {
       printf("[%s] Could not create and SMV for the SI thread\n", __func__);

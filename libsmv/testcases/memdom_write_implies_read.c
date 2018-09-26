@@ -25,7 +25,7 @@ static void *memdom_write_trigger(char *buf) {
 
 int main(){
   
-    printf("-- Test: thread memdom write implies read... ");
+    printf("-- Test: thread memdom write implies read... \n");
     int memdom_id = -1;
     int smv_id = -1;
     int err = 0;

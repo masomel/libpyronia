@@ -92,8 +92,8 @@ static int test_smv_join() {
         goto out;
     }
 
-    smv_leave_domain(memdom_id, MAIN_THREAD);
     memdom_free(str);
+    smv_leave_domain(memdom_id, MAIN_THREAD);
 
  out:
     if (memdom_kill(memdom_id)) {

@@ -7,6 +7,7 @@
 #ifndef __PYR_KERNEL_COMM_H
 #define __PYR_KERNEL_COMM_H
 
+#include <stdbool.h>
 #include <linux/pyronia_mac.h>
 
 #define FAMILY_STR "SI_COMM"
@@ -14,9 +15,9 @@
 // let's place these here since they're really
 // only shared between the main library API and the
 // SI comm channel
-extern pthread_mutex_t security_ctx_mutex;
-extern pthread_cond_t si_cond_var;
-extern int is_inspecting_stack;
+pthread_mutex_t security_ctx_mutex;
+pthread_cond_t si_cond_var;
+bool is_inspecting_stack;
 
 #ifdef __cplusplus
 extern "C" {

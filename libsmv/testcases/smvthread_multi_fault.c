@@ -25,7 +25,7 @@ static void *memdom_write_trigger(char *buf) {
 }
 
 int main(){
-  printf("-- Test: thread memdom multi smv thread access fault... ");
+    printf("-- Test: thread memdom multi smv thread access fault... \n");
     int i = 0;
     int rv = 0;
     int smv_id[NUM_THREADS];

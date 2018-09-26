@@ -46,8 +46,10 @@ static void *get_in_addr(struct sockaddr *sa)
 
 static int test_file_open() {
     FILE *f;
-    f = fopen("/tmp/cam0", "r");
 
+    f = fopen("/tmp/cam0", "r");
+    printf("%s opened /tmp/cam0\n", __func__);
+    
     if (f == NULL) {
         printf("%s\n", strerror(errno));
         return -1;

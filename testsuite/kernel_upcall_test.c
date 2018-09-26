@@ -57,7 +57,7 @@ int main (int argc, char *argv[]) {
     printf("Error initializing Pyronia: %d\n", ret);
     goto out;
   }
-  
+  /*
   printf("---Testing authorized file open\n");
   
   test_type = 0;
@@ -90,7 +90,7 @@ int main (int argc, char *argv[]) {
   printf("---Testing unauthorized network access\n");
 
   ret = test_connect_fail();
-  
+  */
  out:
   pyr_exit();
   return ret;

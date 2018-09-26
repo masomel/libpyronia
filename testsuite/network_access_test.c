@@ -48,5 +48,6 @@ int main (int argc, char *argv[]) {
   ret = test_file_open();
   
  out:
+  pyr_exit();
   return ret;
 }

@@ -430,6 +430,11 @@ void memdom_free(void* data){
   char *memblock = NULL;
   int memdom_id = -1;
 
+  if (!data) {
+    rlog("[%s] Data block is NULL\n", __func__);
+    return;
+  }
+  
   if (memdom_query_id(data) == -1) {
     rlog("[%s] Data block at %p not in memdom\n", __func__, data);
     return;

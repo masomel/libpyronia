@@ -52,7 +52,8 @@ int main (int argc, char *argv[]) {
   
   // make sure it can't access the network
   ret = test_connect();
-  
+
  out:
+  pyr_exit();
   return ret;
 }
