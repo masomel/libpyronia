@@ -2,6 +2,8 @@
 
 SRCDIR=../testsuite
 
+./load_test_profiles
+
 rm $HOME/*_test
 
 gcc -g $SRCDIR/kernel_upcall_test.c -o $HOME/kernel_upcall_test -lpyronia -lsmv
@@ -19,3 +21,5 @@ echo "*** Running End-to-End Pyronia Tests***"
 ./file_access_test
 ./network_access_test
 ./callgraph_perms_fail_test
+./critical_state_alloc_test
+./si_thread_test

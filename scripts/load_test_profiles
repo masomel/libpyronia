@@ -1,0 +1,22 @@
+#!/bin/bash
+
+sudo cp /home/pyronia/libpyronia/libapparmor/libraries/libapparmor/testsuite/home.pyronia.kernel_permissions_checker_test /etc/pyronia.d
+sudo apparmor_parser -r /etc/pyronia.d/home.pyronia.kernel_permissions_checker_test
+
+sudo cp /home/pyronia/libpyronia/testsuite/home.pyronia.kernel_upcall_test /etc/pyronia.d
+sudo apparmor_parser -r /etc/pyronia.d/home.pyronia.kernel_upcall_test
+
+sudo cp /home/pyronia/libpyronia/testsuite/home.pyronia.file_access_test /etc/pyronia.d
+sudo apparmor_parser -r /etc/pyronia.d/home.pyronia.file_access_test
+
+sudo cp /home/pyronia/libpyronia/testsuite/home.pyronia.network_access_test /etc/pyronia.d
+sudo apparmor_parser -r /etc/pyronia.d/home.pyronia.network_access_test
+
+sudo cp /home/pyronia/libpyronia/testsuite/home.pyronia.callgraph_perms_fail_test /etc/pyronia.d
+sudo apparmor_parser -r /etc/pyronia.d/home.pyronia.callgraph_perms_fail_test
+
+sudo cp /home/pyronia/libpyronia/testsuite/home.pyronia.critical_state_alloc_test /etc/pyronia.d
+sudo apparmor_parser -r /etc/pyronia.d/home.pyronia.critical_state_alloc_test
+
+sudo cp /home/pyronia/libpyronia/testsuite/home.pyronia.si_thread_test /etc/pyronia.d
+sudo apparmor_parser -r /etc/pyronia.d/home.pyronia.si_thread_test
