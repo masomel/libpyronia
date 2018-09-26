@@ -34,24 +34,13 @@
 #define malloc(sz) memdom_alloc(memdom_private_id(), sz)
 #endif
 
-/* Free list structure
- * A free list struct records a block of memory available for allocation.
- * memdom_alloc() allocates memory from the tail of the free list (usually the largest available block).
- * memdom_free() inserts free list to the head of the free list
- */
-struct free_list_struct {
-  void *addr;
-  unsigned long size;
-  struct free_list_struct *next;
-};
-
 /* Every allocated chunk of memory has this block header to record the required
  * metadata for the allocator to free memory
  */
-struct block_header_struct {
-  void *addr;
-  int memdom_id;
-  unsigned long size;
+struct alloc_metadata {
+    void *addr;
+    unsigned long size;
+    struct alloc_metadata *next;
 };
 
 /* Memory domain metadata structure
@@ -64,10 +53,11 @@ struct memdom_metadata_struct {
   int memdom_id;
   void *start;    // start of this memdom's addr (inclusive)
   unsigned long total_size; // the total memory size of this memdom
-  struct free_list_struct *free_list_head;
-  struct free_list_struct *free_list_tail;
+  struct alloc_metadata *free_list_head;
+  struct alloc_metadata *free_list_tail;
+  struct alloc_metadata *allocs;
   int cur_alloc;
-  int max_alloc;
+  int peak_alloc;
   pthread_mutex_t mlock;  // protects this memdom in sn SMP environment
 };
 extern struct memdom_metadata_struct *memdom[MAX_MEMDOM];
@@ -84,9 +74,9 @@ extern "C" {
 
   /* Allocate memory region in memory domain memdom */
   void *memdom_mmap(int memdom_id,
-		    unsigned long addr, unsigned long len,
-		    unsigned long prot, unsigned long flags,
-		    unsigned long fd, unsigned long pgoff);
+                    unsigned long addr, unsigned long len,
+                    unsigned long prot, unsigned long flags,
+                    unsigned long fd, unsigned long pgoff);
 
   /* Allocate npages pages in memory domain memdom */
   void *memdom_alloc(int memdom_id, unsigned long nbytes);
