@@ -56,8 +56,8 @@ struct memdom_metadata_struct {
   struct alloc_metadata *free_list_head;
   struct alloc_metadata *free_list_tail;
   struct alloc_metadata *allocs;
-  int cur_alloc;
-  int peak_alloc;
+  unsigned long cur_alloc;
+  unsigned long peak_alloc;
   pthread_mutex_t mlock;  // protects this memdom in sn SMP environment
 };
 extern struct memdom_metadata_struct *memdom[MAX_MEMDOM];

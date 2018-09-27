@@ -72,7 +72,7 @@ int memdom_kill(int memdom_id){
   while( free_list ) {
     struct alloc_metadata *tmp = free_list;
     free_list = free_list->next;
-    rlog("freeing free_list addr: %p, size: %lu bytes\n", tmp->addr, tmp->size);
+    rlog("freeing free_list %p addr: %p, size: %lu bytes\n", tmp, tmp->addr, tmp->size);
     free(tmp);
   }
 
@@ -81,7 +81,7 @@ int memdom_kill(int memdom_id){
   while( free_list ) {
     struct alloc_metadata *tmp = free_list;
     free_list = free_list->next;
-    rlog("freeing remaining allocated block at addr: %p, size: %lu bytes\n", tmp->addr, tmp->size);
+    rlog("freeing remaining allocated block %p at addr: %p, size: %lu bytes\n", tmp, tmp->addr, tmp->size);
     free(tmp);
   }
 
@@ -228,17 +228,17 @@ int memdom_private_id(void){
 static void dumpFreeListHead(int memdom_id) {
   struct alloc_metadata *walk = memdom[memdom_id]->free_list_head;
   while ( walk ) {
-      rlog("[%s] memdom %d free_list addr: %p, sz: %d\n",
+      rlog("[%s] memdom %d free_list addr: %p, sz: %lu\n",
            __func__, memdom_id, walk->addr, walk->size);
       walk = walk->next;
   }
 }
 
-static struct alloc_metadata *walkAllocsList(int memdom_id, void *addr, int dump) {
+struct alloc_metadata *walkAllocsList(int memdom_id, void *addr, int dump) {
   struct alloc_metadata *walk = memdom[memdom_id]->allocs;
   while ( walk ) {
       if (dump)
-          rlog("[%s] memdom %d free_list addr: %p, sz: %d\n",
+          rlog("[%s] memdom %d allocation addr: %p, sz: %lu\n",
                __func__, memdom_id, walk->addr, walk->size);
       if (walk->addr == addr)
           break;
@@ -276,7 +276,7 @@ void free_list_insert_to_head(int memdom_id, struct alloc_metadata *new_free_lis
     new_free_list->next = head;
   }
   memdom[memdom_id]->free_list_head = new_free_list;
-  rlog("[%s] memdom %d inserted free list addr: %p, size: %d\n", __func__, memdom_id, new_free_list->addr, new_free_list->size);
+  rlog("[%s] memdom %d inserted free list addr: %p, size: %lu\n", __func__, memdom_id, new_free_list->addr, new_free_list->size);
 }
 
 /* Insert a free list struct to the head of memdom free list
@@ -289,16 +289,18 @@ void allocs_insert_to_head(int memdom_id, struct alloc_metadata *new_alloc){
     new_alloc->next = head;
   }
   memdom[memdom_id]->allocs = new_alloc;
-  rlog("[%s] memdom %d inserted allocation addr: %p, size: %d\n", __func__, memdom_id, new_alloc->addr, new_alloc->size);
+  rlog("[%s] memdom %d inserted allocation %p addr: %p, size: %lu\n", __func__, memdom_id, new_alloc, new_alloc->addr, new_alloc->size);
 }
 
 // removes the reference, but does not free!
-static void remove_alloc_metadata_from(struct alloc_metadata *to_remove, struct alloc_metadata *src_list) {
-    struct alloc_metadata *walk = src_list;
+void remove_alloc_metadata_from(struct alloc_metadata *to_remove, struct alloc_metadata **src_list) {
+    struct alloc_metadata *walk = *src_list;
 
     // in this case, we're trying to remove the head
     if (walk->addr == to_remove->addr) {
-        src_list = to_remove->next;
+        *src_list = to_remove->next;
+	if (*src_list)
+	  rlog("[%s] New head of the list is %p with %lu bytes\n", __func__, (*src_list)->addr, (*src_list)->size);
         return;
     }
 
@@ -436,7 +438,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
       // into the allocs list
       if( free_list->size == sz ) {
           new_alloc = free_list;
-          remove_alloc_metadata_from(free_list, memdom[memdom_id]->free_list_head);
+          remove_alloc_metadata_from(free_list, &memdom[memdom_id]->free_list_head);
           rlog("[%s] Found perfect block. Move free list to allocs list\n", __func__);
       }
       /* Adjust free list:
@@ -448,7 +450,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
 	free_list->addr = (void*)ptr;
 	free_list->size = free_list->size - sz;
         new_alloc = alloc_metadata_init(memblock, sz);
-	rlog("[%s] Adjust free list to addr %p, sz %d\n",
+	rlog("[%s] Adjust free list to addr %p, sz %lu\n",
 	     __func__, free_list->addr, free_list->size);
       }
       allocs_insert_to_head(memdom_id, new_alloc);
@@ -457,7 +459,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
     // check if this free chunk is contiguous with the previous chunk. Merge if they are
     else if (prev && (prev->addr + prev->size == free_list->addr)) {
         prev->size += free_list->size;
-        remove_alloc_metadata_from(free_list, memdom[memdom_id]->free_list_head);
+        remove_alloc_metadata_from(free_list, &memdom[memdom_id]->free_list_head);
         free(free_list);
         free_list = prev;
         continue;
@@ -509,7 +511,8 @@ void memdom_free(void* data){
 
   pthread_mutex_lock(&memdom[memdom_id]->mlock);
 
-  alloc = walkAllocsList(memdom_id, data, 1);
+  rlog("[%s] allocs head: %p\n", __func__, memdom[memdom_id]->allocs);
+  alloc = memdom[memdom_id]->allocs;
   if (!alloc) {
       rlog("[%s] Something went wrong. Data block at %p not found\n", __func__, data);
     return;
@@ -521,7 +524,8 @@ void memdom_free(void* data){
 
   /* Move this metadata from the allocs to the free list */
   free_list_insert_to_head(memdom_id, alloc);
-  remove_alloc_metadata_from(alloc, memdom[memdom_id]->allocs);
+  remove_alloc_metadata_from(alloc, &memdom[memdom_id]->allocs);
+  rlog("[%s] allocs head: %p\n", __func__, memdom[memdom_id]->allocs);
   rlog("[%s] Move alloc to free list\n", __func__);
   memdom[memdom_id]->cur_alloc -= alloc->size;
   rlog("Current allocations: %lu bytes\n", memdom[memdom_id]->cur_alloc);
