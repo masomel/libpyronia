@@ -53,7 +53,7 @@ int pyr_init(const char *main_mod_path,
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
     pthread_mutex_init(&security_ctx_mutex, &attr);
     pthread_cond_init(&si_cond_var, NULL);
-    
+
     /* Register with the memdom subsystem */
     // We don't want the main thread's memdom to be
     // globally accessible, so init with 0.
@@ -73,7 +73,7 @@ int pyr_init(const char *main_mod_path,
     // We need this SMV to be able to access any Python functions
     smv_join_domain(MAIN_THREAD, pyr_smv_id);
     memdom_priv_add(MAIN_THREAD, pyr_smv_id, MEMDOM_READ | MEMDOM_WRITE);
-    
+
     /* Initialize the runtime's security context */
     err = pyr_security_context_alloc(&runtime, collect_callstack_cb);
     if (!err)
@@ -82,7 +82,7 @@ int pyr_init(const char *main_mod_path,
         printf("[%s] Runtime initialization failure\n", __func__);
         goto out;
     }
-    
+
     /* Parse the library policy from disk */
     err = pyr_parse_lib_policy(lib_policy_file, &policy);
     if (err < 0) {
@@ -91,11 +91,11 @@ int pyr_init(const char *main_mod_path,
     }
 
     /* Initialize the stack inspection communication channel with
-     * the kernel */ 
+     * the kernel */
     err = pyr_init_si_comm(policy);
     if (err) {
         printf("[%s] SI comm channel initialization failed\n", __func__);
-	goto out;
+        goto out;
     }
 
     pyr_callstack_req_listen();
@@ -113,17 +113,23 @@ int pyr_init(const char *main_mod_path,
 /** Wrapper around memdom_alloc in the interpreter domain.
  */
 void *pyr_alloc_critical_runtime_state(size_t size) {
-    void *new_block = NULL;    
+    void *new_block = NULL;
+    int i = 0;
     if (is_build)
       return malloc(size);
 
-    if (!runtime || runtime->interp_dom < 1)
+    if (!runtime)
         return NULL;
 
     rlog("[%s] %lu bytes\n", __func__, size);
 
     pthread_mutex_lock(&security_ctx_mutex);
-    new_block = memdom_alloc(runtime->interp_dom, size);
+    for (i = 0; i < NUM_INTERP_DOMS; i++) {
+        if (memdom_get_free_bytes(runtime->interp_dom[i]) >= size) {
+            new_block = memdom_alloc(runtime->interp_dom[i], size);
+            break;
+        }
+    }
     pthread_mutex_unlock(&security_ctx_mutex);
     return new_block;
 }
@@ -153,17 +159,27 @@ int pyr_free_critical_state(void *op) {
  * given pointer is in the interpreter_dom, 0 otherwise.
  */
 int pyr_is_critical_state(void *op) {
-    struct allocation_record *runner;
     int ret = 0;
+    int i = 0;
+    int obj_memdom = -1;
 
     if (is_build)
         return 0;
-    
+
     if (!runtime)
         return 0;
 
     pthread_mutex_lock(&security_ctx_mutex);
-    ret = (memdom_query_id(op) == runtime->interp_dom);
+    obj_memdom = memdom_query_id(op);
+    if (obj_memdom == 0 || obj_memdom == -1)
+        goto out;
+    for (i = 0; i < NUM_INTERP_DOMS; i++) {
+        if (obj_memdom == runtime->interp_dom[i]) {
+            ret = 1;
+            goto out;
+        }
+    }
+ out:
     pthread_mutex_unlock(&security_ctx_mutex);
     return ret;
 }
@@ -171,15 +187,17 @@ int pyr_is_critical_state(void *op) {
 /** Grants the main thread write access to the interpreter domain.
  */
 void pyr_grant_critical_state_write() {
+    int i = 0;
+
     if (is_build)
       return;
-  
+
     // suspend if the stack tracer thread is running
     pyr_is_inspecting();
 
     // let's skip adding write privs if our runtime
     // doesn't have a domain or our domain is invalid
-    if (!runtime || runtime->interp_dom < 1) {
+    if (!runtime) {
         return;
     }
 
@@ -188,7 +206,8 @@ void pyr_grant_critical_state_write() {
     // and simply keep track of how many times we've granted access
     pthread_mutex_lock(&security_ctx_mutex);
     if (runtime->nested_grants == 0) {
-      memdom_priv_add(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
+        for (i = 0; i < NUM_INTERP_DOMS; i++)
+            memdom_priv_add(runtime->interp_dom[i], MAIN_THREAD, MEMDOM_WRITE);
     }
     runtime->nested_grants++;
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -197,6 +216,7 @@ void pyr_grant_critical_state_write() {
 /** Revokes the main thread's write privileges to the interpreter domain.
  */
 void pyr_revoke_critical_state_write() {
+    int i = 0;
     if (is_build)
       return;
 
@@ -205,17 +225,18 @@ void pyr_revoke_critical_state_write() {
 
     // let's skip adding write privs if our runtime
     // doesn't have a domain or our domain is invalid
-    if (!runtime || runtime->interp_dom < 1) {
+    if (!runtime) {
         return;
     }
 
     rlog("[%s] Number of grants: %d\n", __func__, runtime->nested_grants);
-    
+
     pthread_mutex_lock(&security_ctx_mutex);
     runtime->nested_grants--;
     // same optimization as above
     if (runtime->nested_grants == 0) {
-      memdom_priv_del(runtime->interp_dom, MAIN_THREAD, MEMDOM_WRITE);
+        for (i = 0; i < NUM_INTERP_DOMS; i++)
+            memdom_priv_del(runtime->interp_dom[i], MAIN_THREAD, MEMDOM_WRITE);
     }
     pthread_mutex_unlock(&security_ctx_mutex);
 }
@@ -232,7 +253,7 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #undef pthread_create
 #endif
-    
+
     // suspend if the stack tracer thread is running
     pyr_is_inspecting();
 
@@ -267,7 +288,7 @@ void pyr_callstack_req_listen() {
 
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    
+
     smv_id = smv_create();
     if (smv_id == -1) {
       printf("[%s] Could not create and SMV for the SI thread\n", __func__);
@@ -289,15 +310,13 @@ int pyr_is_interpreter_build() {
 }
 
 /* Do all necessary teardown actions. */
-void pyr_exit() {  
+void pyr_exit() {
     if (is_build) {
       return;
     }
 
     // suspend if the stack tracer thread is running
     pyr_is_inspecting();
-
-    int interp_dom = runtime->interp_dom;
 
     rlog("[%s] Exiting Pyronia runtime\n", __func__);
     pthread_cancel(recv_th);
@@ -306,8 +325,6 @@ void pyr_exit() {
     if (runtime->main_path)
       pyr_free_critical_state(runtime->main_path);
     pyr_security_context_free(&runtime);
-    pyr_revoke_critical_state_write();
-    memdom_kill(interp_dom);
 }
 
 /** Wrapper around the runtime callstack collection callback
