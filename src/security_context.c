@@ -187,19 +187,6 @@ int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib) {
     return -1;
 }
 
-static void allocation_record_free(struct allocation_record **rp) {
-    struct allocation_record *r = *rp;
-
-    if (!r)
-        return;
-
-    if (r->next)
-        allocation_record_free(&r->next);
-
-    memdom_free(r);
-    *rp = NULL;
-}
-
 void pyr_security_context_free(struct pyr_security_context **ctxp) {
     struct pyr_security_context *c = *ctxp;
     int i = 0;
@@ -214,7 +201,6 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
     printf("[%s] Freed all native libs\n", __func__);
 
     for (i = 0; i < NUM_INTERP_DOMS; i++) {
-        memdom_priv_del(c->interp_dom[i], MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
         memdom_kill(c->interp_dom[i]);
     }
 

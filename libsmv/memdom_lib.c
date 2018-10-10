@@ -28,7 +28,7 @@ int memdom_create(){
   #endif
   memdom[memdom_id]->memdom_id = memdom_id;
   memdom[memdom_id]->start = NULL; // memdom_alloc will do the actual mmap
-  memdom[memdom_id]->total_size = 0;
+  memdom[memdom_id]->total_size = MEMDOM_HEAP_SIZE;
   memdom[memdom_id]->free_list_head = NULL;
   memdom[memdom_id]->free_list_tail = NULL;
   memdom[memdom_id]->allocs = NULL;

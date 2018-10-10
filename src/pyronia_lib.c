@@ -285,7 +285,8 @@ int pyr_run_native_func_isolated(const char *lib, void *(*func)(void)) {
 void pyr_callstack_req_listen() {
     pthread_attr_t attr;
     int smv_id = -1;
-
+    int i = 0;
+    
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
@@ -299,8 +300,10 @@ void pyr_callstack_req_listen() {
     // to access the functions
     smv_join_domain(MAIN_THREAD, smv_id);
     memdom_priv_add(MAIN_THREAD, smv_id, MEMDOM_READ | MEMDOM_WRITE);
-    smv_join_domain(runtime->interp_dom, smv_id);
-    memdom_priv_add(runtime->interp_dom, smv_id, MEMDOM_READ | MEMDOM_WRITE);
+    for (i = 0; i < NUM_INTERP_DOMS; i++) {
+      smv_join_domain(runtime->interp_dom[i], smv_id);
+      memdom_priv_add(runtime->interp_dom[i], smv_id, MEMDOM_READ | MEMDOM_WRITE);
+    }
 
     smvthread_create_attr(smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
 }
