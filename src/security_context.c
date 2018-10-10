@@ -69,7 +69,6 @@ int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
 
 /* Insert a new allocation record at the head of the list.
  * Note: expects caller to hold the memdom lock and the context mutex.
- */
 int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
                                 void *addr) {
     struct allocation_record *r = NULL;
@@ -91,7 +90,6 @@ int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
 /* Remove the allocation record for the given address.
  * Assumes the address will be freed by the caller.
  * Note: expects the caller to hold the context mutex
- */
 void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) {
   struct allocation_record *runner = NULL, *tmp = NULL;
 
@@ -118,24 +116,14 @@ void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) 
     }
     runner = runner->next;
   }
-}
+  }*/
 
 int pyr_security_context_alloc(struct pyr_security_context **ctxp,
                                pyr_cg_node_t *(*collect_callstack_cb)(void)) {
     int err = 0;
     struct pyr_security_context *c = NULL;
     int interp_memdom = -1;
-
-    // create the memdom first so this struct
-    // can also be allocated in interp_dom
-    if ((interp_memdom = memdom_create()) == -1) {
-      printf("[%s] Could not create interpreter dom\n", __func__);
-      goto fail;
-    }
-
-    // don't forget to add the main thread to this memdom
-    smv_join_domain(interp_memdom, MAIN_THREAD);
-    memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+    int i = 0;
 
     // we want this to be allocated in the interpreter memdom
     c = malloc(sizeof(struct pyr_security_context));
@@ -149,11 +137,23 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
         goto fail;
 	}*/
 
+    for (i = 0; i < NUM_INTERP_DOMS; i++) {
+        // create the memdom first so this struct
+        // can also be allocated in interp_dom
+        if ((interp_memdom = memdom_create()) == -1) {
+            printf("[%s] Could not create interpreter dom # %d\n", __func__, i);
+            goto fail;
+        }
+        // don't forget to add the main thread to this memdom
+        smv_join_domain(interp_memdom, MAIN_THREAD);
+        memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+        
+        c->interp_dom[i] = interp_memdom;
+    }
+
     c->main_path = NULL;
-    c->interp_dom = interp_memdom;
     // this ensures that we really do revoke write access at the end of pyr_init
     c->nested_grants = 1;
-    c->alloc_blocks = NULL;
 
     /*if (!collect_callstack_cb) {
         printf("[%s] Need non-null callstack collect callback\n", __func__);
@@ -170,7 +170,6 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     return 0;
  fail:
     if (c)
-      //memdom_free(c);
       free(c);
     *ctxp = NULL;
     return err;
@@ -203,19 +202,22 @@ static void allocation_record_free(struct allocation_record **rp) {
 
 void pyr_security_context_free(struct pyr_security_context **ctxp) {
     struct pyr_security_context *c = *ctxp;
-    int memdom_id = -1;
+    int i = 0;
 
     if (!c)
         return;
 
     printf("[%s] Freeing security context %p\n", __func__, c);
-      
+
     pyr_native_lib_context_free(&c->native_libs);
-    allocation_record_free(&c->alloc_blocks);
 
     printf("[%s] Freed all native libs\n", __func__);
 
-    //memdom_free(c);
+    for (i = 0; i < NUM_INTERP_DOMS; i++) {
+        memdom_priv_del(c->interp_dom[i], MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+        memdom_kill(c->interp_dom[i]);
+    }
+
     free(c);
     *ctxp = NULL;
 }

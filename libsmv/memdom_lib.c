@@ -532,3 +532,10 @@ void memdom_free(void* data){
 
   pthread_mutex_unlock(&memdom[memdom_id]->mlock);
 }
+
+/* Get the number of free bytes in a memdom */
+unsigned long memdom_get_free_bytes(int memdom_id) {
+    if (!memdom[memdom_id])
+        return 0;
+    return memdom[memdom_id]->total_size - memdom[memdom_id]->cur_alloc;
+}

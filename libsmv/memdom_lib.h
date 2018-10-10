@@ -102,6 +102,9 @@ extern "C" {
   /* Get the calling thread's default memdom id */
   int memdom_private_id(void);
 
+    /* Get the number of free bytes in a memdom */
+    unsigned long memdom_get_free_bytes(int memdom_id);
+
   #ifdef __cplusplus
 }
 #endif
