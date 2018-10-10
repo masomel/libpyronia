@@ -125,10 +125,12 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
     int ret;
 
     char *policy;
+    char *policyp;
     ret = read_policy_file(policy_fname, &policy);
     if (ret < 0) {
         goto fail;
     }
+    policyp = policy;
     
     // loop through the policy to serialize it into
     // a format that can be interpreted by the LSM
@@ -177,13 +179,16 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed) {
     }
     memset(out, 0, strlen(ser)+INT32_STR_SIZE+2);
     ret = sprintf(out, "%d,%s", count, ser);
-    free(ser);
-
-    *parsed = out;
-    return ret;
+    goto done;
+    
  fail:
+    out = NULL;
+    
+ done:
+    if (policyp)
+      pyr_free_critical_state(policyp);
     if (ser)
         free(ser);
-    *parsed = NULL;
+    *parsed = out;
     return ret;
 }

@@ -289,7 +289,7 @@ void allocs_insert_to_head(int memdom_id, struct alloc_metadata *new_alloc){
     new_alloc->next = head;
   }
   memdom[memdom_id]->allocs = new_alloc;
-  rlog("[%s] memdom %d inserted allocation %p addr: %p, size: %lu\n", __func__, memdom_id, new_alloc, new_alloc->addr, new_alloc->size);
+  rlog("[%s] memdom %d inserted allocation %p addr: %p, size: %lu, next: %p\n", __func__, memdom_id, new_alloc, new_alloc->addr, new_alloc->size, new_alloc->next);
 }
 
 // removes the reference, but does not free!
@@ -301,12 +301,14 @@ void remove_alloc_metadata_from(struct alloc_metadata *to_remove, struct alloc_m
         *src_list = to_remove->next;
 	if (*src_list)
 	  rlog("[%s] New head of the list is %p with %lu bytes\n", __func__, (*src_list)->addr, (*src_list)->size);
+	to_remove->next = NULL; // detach this block from the list
         return;
     }
 
     while (walk) {
         if (walk->next && walk->next->addr == to_remove->addr) {
             walk->next = to_remove->next;
+	    to_remove->next = NULL; // detach this block from the list
             break;
         }
         walk = walk->next;
@@ -401,13 +403,11 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
 	 __func__, memdom_id, free_list->addr, free_list->size);
     /* Last chunk is now allocated, tail is not available from now */
     if( free_list->size == 0 ) {
-        new_alloc = free_list;
+      free(free_list);
       memdom[memdom_id]->free_list_tail = NULL;
       rlog("[%s] free_list size is 0, freed this alloc_metadata, the next allocate should request from free_list_head\n", __func__);
     }
-    else {
-        new_alloc = alloc_metadata_init(memblock, sz);
-    }
+    new_alloc = alloc_metadata_init(memblock, sz);
     allocs_insert_to_head(memdom_id, new_alloc);
     goto out;
   }
@@ -512,7 +512,7 @@ void memdom_free(void* data){
   pthread_mutex_lock(&memdom[memdom_id]->mlock);
 
   rlog("[%s] allocs head: %p\n", __func__, memdom[memdom_id]->allocs);
-  alloc = memdom[memdom_id]->allocs;
+  alloc = walkAllocsList(memdom_id, data, 1);
   if (!alloc) {
       rlog("[%s] Something went wrong. Data block at %p not found\n", __func__, data);
     return;
@@ -523,8 +523,8 @@ void memdom_free(void* data){
   memset(data, 0, alloc->size);
 
   /* Move this metadata from the allocs to the free list */
-  free_list_insert_to_head(memdom_id, alloc);
   remove_alloc_metadata_from(alloc, &memdom[memdom_id]->allocs);
+  free_list_insert_to_head(memdom_id, alloc);
   rlog("[%s] allocs head: %p\n", __func__, memdom[memdom_id]->allocs);
   rlog("[%s] Move alloc to free list\n", __func__);
   memdom[memdom_id]->cur_alloc -= alloc->size;
