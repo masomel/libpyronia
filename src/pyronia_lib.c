@@ -127,7 +127,13 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
     for (i = 0; i < NUM_INTERP_DOMS; i++) {
         if (memdom_get_free_bytes(runtime->interp_dom[i]) >= size) {
             new_block = memdom_alloc(runtime->interp_dom[i], size);
-            break;
+
+	    if (new_block)
+	      break;
+	    else
+	      // FIXME: we hit this case if memdom_alloc can't find a large
+	      // enough contiguous block of memory, so let's try again
+	      continue;
         }
     }
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -145,7 +151,7 @@ int pyr_free_critical_state(void *op) {
     if (!runtime)
         return 0;
 
-    if (runtime->interp_dom > 0 && pyr_is_critical_state(op)) {
+    if (pyr_is_critical_state(op)) {
         pthread_mutex_lock(&security_ctx_mutex);
         memdom_free(op);
         pthread_mutex_unlock(&security_ctx_mutex);

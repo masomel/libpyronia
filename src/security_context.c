@@ -120,7 +120,7 @@ void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) 
 
 int pyr_security_context_alloc(struct pyr_security_context **ctxp,
                                pyr_cg_node_t *(*collect_callstack_cb)(void)) {
-    int err = 0;
+    int err = -1;
     struct pyr_security_context *c = NULL;
     int interp_memdom = -1;
     int i = 0;

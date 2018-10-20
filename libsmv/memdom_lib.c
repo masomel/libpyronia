@@ -472,7 +472,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
 
  out:
   if( !memblock ) {
-    fprintf(stderr, "memdom_alloc failed: no memory can be allocated in memdom %d\n", memdom_id);
+    rlog("[%s] memdom_alloc failed: no memory can be allocated in memdom %d\n", __func__, memdom_id);
   }
   else{
     rlog("[%s] new_alloc: addr %p, allocated %lu bytes\n", __func__, new_alloc->addr, new_alloc->size);
