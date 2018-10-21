@@ -8,7 +8,7 @@
 #ifndef __PYR_SEC_CTX_H
 #define __PYR_SEC_CTX_H
 
-#define NUM_INTERP_DOMS 32
+#define MAX_NUM_INTERP_DOMS 32
 
 struct pyr_native_lib_context {
     char *library_name; // runtimes also identify libraries by string name
@@ -27,7 +27,7 @@ typedef struct pyr_cg_node pyr_cg_node_t;
  * Used for pyronia-related bookkeeping */
 struct pyr_security_context {
     char *main_path;
-    int interp_dom[NUM_INTERP_DOMS];
+    int interp_dom[MAX_NUM_INTERP_DOMS];
     pyr_native_ctx_t *native_libs;
     /* The runtime may grant write access to the critical state
      * in a function that calls another function that grants access

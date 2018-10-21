@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
@@ -25,6 +26,8 @@ static struct pyr_security_context *runtime = NULL;
 static int pyr_smv_id = -1;
 static int is_build = 0;
 static pthread_t recv_th;
+static int num_interp_memdoms_in_use = 1;
+static bool interp_dom_has_space[MAX_NUM_INTERP_DOMS];
 
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
@@ -34,7 +37,7 @@ static pthread_t recv_th;
 int pyr_init(const char *main_mod_path,
              const char *lib_policy_file,
              pyr_cg_node_t *(*collect_callstack_cb)(void)) {
-    int err = 0;
+    int err = 0, i = 0;
     char *policy = NULL;
     pthread_mutexattr_t attr;
 
@@ -73,6 +76,11 @@ int pyr_init(const char *main_mod_path,
     // We need this SMV to be able to access any Python functions
     smv_join_domain(MAIN_THREAD, pyr_smv_id);
     memdom_priv_add(MAIN_THREAD, pyr_smv_id, MEMDOM_READ | MEMDOM_WRITE);
+
+    // init the mem management
+    for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
+        interp_dom_has_space[i] = true;
+    }
 
     /* Initialize the runtime's security context */
     err = pyr_security_context_alloc(&runtime, collect_callstack_cb);
@@ -124,16 +132,21 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
     rlog("[%s] %lu bytes\n", __func__, size);
 
     pthread_mutex_lock(&security_ctx_mutex);
-    for (i = 0; i < NUM_INTERP_DOMS; i++) {
-        if (memdom_get_free_bytes(runtime->interp_dom[i]) >= size) {
+    for (i = 0; i < num_interp_memdoms_in_use; i++) {
+        if (memdom_get_free_bytes(runtime->interp_dom[i]) >= size &&
+            interp_dom_has_space[i]) {
             new_block = memdom_alloc(runtime->interp_dom[i], size);
 
-	    if (new_block)
-	      break;
-	    else
-	      // FIXME: we hit this case if memdom_alloc can't find a large
-	      // enough contiguous block of memory, so let's try again
-	      continue;
+            if (new_block)
+                break;
+            else {
+                interp_dom_has_space[i] = false;
+                continue;
+            }
+
+        }
+        else if ((++num_interp_memdoms_in_use) <= MAX_NUM_INTERP_DOMS) {
+            continue;
         }
     }
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -144,6 +157,7 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
  * Returns 1 if the state was freed, 0 otherwise.
  */
 int pyr_free_critical_state(void *op) {
+    int obj_memdom = -1;
     if (is_build) {
         return 0;
     }
@@ -153,7 +167,11 @@ int pyr_free_critical_state(void *op) {
 
     if (pyr_is_critical_state(op)) {
         pthread_mutex_lock(&security_ctx_mutex);
+        obj_memdom = memdom_query_id(op);
         memdom_free(op);
+        if (interp_dom_has_space[obj_memdom-1] == false) {
+            interp_dom_has_space[obj_memdom-1] = true;
+        }
         pthread_mutex_unlock(&security_ctx_mutex);
         rlog("[%s] Freed %p\n", __func__, op);
         return 1;
@@ -179,7 +197,7 @@ int pyr_is_critical_state(void *op) {
     obj_memdom = memdom_query_id(op);
     if (obj_memdom == 0 || obj_memdom == -1)
         goto out;
-    for (i = 0; i < NUM_INTERP_DOMS; i++) {
+    for (i = 0; i < num_interp_memdoms_in_use; i++) {
         if (obj_memdom == runtime->interp_dom[i]) {
             ret = 1;
             goto out;
@@ -212,7 +230,7 @@ void pyr_grant_critical_state_write() {
     // and simply keep track of how many times we've granted access
     pthread_mutex_lock(&security_ctx_mutex);
     if (runtime->nested_grants == 0) {
-        for (i = 0; i < NUM_INTERP_DOMS; i++)
+        for (i = 0; i < num_interp_memdoms_in_use; i++)
             memdom_priv_add(runtime->interp_dom[i], MAIN_THREAD, MEMDOM_WRITE);
     }
     runtime->nested_grants++;
@@ -241,7 +259,7 @@ void pyr_revoke_critical_state_write() {
     runtime->nested_grants--;
     // same optimization as above
     if (runtime->nested_grants == 0) {
-        for (i = 0; i < NUM_INTERP_DOMS; i++)
+        for (i = 0; i < num_interp_memdoms_in_use; i++)
             memdom_priv_del(runtime->interp_dom[i], MAIN_THREAD, MEMDOM_WRITE);
     }
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -292,7 +310,7 @@ void pyr_callstack_req_listen() {
     pthread_attr_t attr;
     int smv_id = -1;
     int i = 0;
-    
+
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
@@ -306,7 +324,7 @@ void pyr_callstack_req_listen() {
     // to access the functions
     smv_join_domain(MAIN_THREAD, smv_id);
     memdom_priv_add(MAIN_THREAD, smv_id, MEMDOM_READ | MEMDOM_WRITE);
-    for (i = 0; i < NUM_INTERP_DOMS; i++) {
+    for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
       smv_join_domain(runtime->interp_dom[i], smv_id);
       memdom_priv_add(runtime->interp_dom[i], smv_id, MEMDOM_READ | MEMDOM_WRITE);
     }
