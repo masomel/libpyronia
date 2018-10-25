@@ -138,8 +138,9 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
 	}*/
 
     for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
-        // create the memdom first so this struct
-        // can also be allocated in interp_dom
+        c->interp_dom[i] = malloc(sizeof(pyr_interp_dom_alloc_t));
+        if (!c->interp_dom[i])
+            goto fail;
         if ((interp_memdom = memdom_create()) == -1) {
             printf("[%s] Could not create interpreter dom # %d\n", __func__, i);
             goto fail;
@@ -148,7 +149,9 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
         smv_join_domain(interp_memdom, MAIN_THREAD);
         memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
         
-        c->interp_dom[i] = interp_memdom;
+        c->interp_dom[i]->memdom_id = interp_memdom;
+        c->interp_dom[i]->start = NULL;
+        c->interp_dom[i]->end = NULL;
     }
 
     c->main_path = NULL;
@@ -201,7 +204,8 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
     printf("[%s] Freed all native libs\n", __func__);
 
     for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
-        memdom_kill(c->interp_dom[i]);
+        memdom_free(c->interp_dom[i]->start);
+        memdom_kill(c->interp_dom[i]->memdom_id);
     }
 
     free(c);

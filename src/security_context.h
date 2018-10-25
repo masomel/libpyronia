@@ -19,6 +19,15 @@ struct pyr_native_lib_context {
 
 typedef struct pyr_native_lib_context pyr_native_ctx_t;
 
+struct pyr_interp_dom_alloc {
+    int memdom_id;
+    void *start;
+    void *end;
+    struct pyr_interp_dom_alloc *next;
+};
+
+typedef struct pyr_interp_dom_alloc pyr_interp_dom_alloc_t;
+
 // foward declaration
 struct pyr_cg_node;
 typedef struct pyr_cg_node pyr_cg_node_t;
@@ -27,7 +36,7 @@ typedef struct pyr_cg_node pyr_cg_node_t;
  * Used for pyronia-related bookkeeping */
 struct pyr_security_context {
     char *main_path;
-    int interp_dom[MAX_NUM_INTERP_DOMS];
+    pyr_interp_dom_alloc_t *interp_dom[MAX_NUM_INTERP_DOMS];
     pyr_native_ctx_t *native_libs;
     /* The runtime may grant write access to the critical state
      * in a function that calls another function that grants access

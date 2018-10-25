@@ -131,18 +131,24 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 
     pthread_mutex_lock(&security_ctx_mutex);
     for (i = 0; i < num_interp_memdoms_in_use; i++) {
-        if (memdom_get_free_bytes(runtime->interp_dom[i]) >= size &&
-            interp_dom_has_space[i]) {
-            new_block = memdom_alloc(runtime->interp_dom[i], size);
+        if (memdom_get_free_bytes(runtime->interp_dom[i]->memdom_id) >= size
+            && interp_dom_has_space[i]) {
+            new_block = memdom_alloc(runtime->interp_dom[i]->memdom_id, size);
 
             if (new_block) {
-	        rlog("[%s] Allocated %lu bytes in memdom %d\n", __func__, size, runtime->interp_dom[i]);
+                if (!runtime->interp_dom[i]->start) {
+                    // this is our first allocation in this memdom
+                    // so update the allocation metadata
+                    runtime->interp_dom[i]->start = new_block;
+                    runtime->interp_dom[i]->end = new_block+MEMDOM_HEAP_SIZE;
+                }
+	        rlog("[%s] Allocated %lu bytes in memdom %d\n", __func__, size, runtime->interp_dom[i]->memdom_id);
                 break;
 	    }
             else {
 	      interp_dom_has_space[i] = false;
-	      rlog("[%s] Memdom allocator could not find a suitable block in memdom %d. Current number of active memdoms: %d\n", __func__, runtime->interp_dom[i], num_interp_memdoms_in_use);
-	      if (num_interp_memdoms_in_use == runtime->interp_dom[i]) {
+	      rlog("[%s] Memdom allocator could not find a suitable block in memdom %d. Current number of active memdoms: %d\n", __func__, runtime->interp_dom[i]->memdom_id, num_interp_memdoms_in_use);
+	      if (num_interp_memdoms_in_use == runtime->interp_dom[i]->memdom_id) {
 		num_interp_memdoms_in_use++;
 	      }
             }
@@ -150,7 +156,7 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 	else {
 	  if (interp_dom_has_space[i])
 	    interp_dom_has_space[i] = false;
-	  if (num_interp_memdoms_in_use == runtime->interp_dom[i]) {
+	  if (num_interp_memdoms_in_use == runtime->interp_dom[i]->memdom_id) {
 	    rlog("[%s] Not enough space in any active memdoms. Current number of active memdoms: %d\n", __func__, num_interp_memdoms_in_use);
 	    num_interp_memdoms_in_use++;
 	  }
@@ -166,6 +172,23 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
     return new_block;
 }
 
+static int get_interp_dom_memdom(void *op) {
+    int id = 0;
+    int i = 0;
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    for (i = 0; i < num_interp_memdoms_in_use; i++) {
+        if (op >= runtime->interp_dom[i]->start &&
+            op < runtime->interp_dom[i]->end) {
+            id = runtime->interp_dom[i]->memdom_id;
+            goto out;
+        }
+    }
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+    return id;
+}
+
 /** Wrapper around memdom_free in the interpreter domain.
  * Returns 1 if the state was freed, 0 otherwise.
  */
@@ -178,9 +201,9 @@ int pyr_free_critical_state(void *op) {
     if (!runtime)
         return 0;
 
-    if (pyr_is_critical_state(op)) {
+    obj_memdom = get_interp_dom_memdom(op);
+    if (obj_memdom > 0) {
         pthread_mutex_lock(&security_ctx_mutex);
-        obj_memdom = memdom_query_id(op);
         memdom_free(op);
         if (interp_dom_has_space[obj_memdom-1] == false) {
             interp_dom_has_space[obj_memdom-1] = true;
@@ -197,8 +220,6 @@ int pyr_free_critical_state(void *op) {
  */
 int pyr_is_critical_state(void *op) {
     int ret = 0;
-    int i = 0;
-    int obj_memdom = -1;
 
     if (is_build)
         return 0;
@@ -206,19 +227,9 @@ int pyr_is_critical_state(void *op) {
     if (!runtime)
         return 0;
 
-    pthread_mutex_lock(&security_ctx_mutex);
-    obj_memdom = memdom_query_id(op);
-    if (obj_memdom == 0 || obj_memdom == -1)
-        goto out;
-    for (i = 0; i < num_interp_memdoms_in_use; i++) {
-        if (obj_memdom == runtime->interp_dom[i]) {
-            ret = 1;
-            goto out;
-        }
-    }
- out:
-    pthread_mutex_unlock(&security_ctx_mutex);
-    return ret;
+    ret = get_interp_dom_memdom(op);
+
+    return (ret > 0);
 }
 
 /** Grants the main thread write access to the interpreter domain.
@@ -244,7 +255,7 @@ void pyr_grant_critical_state_write() {
     pthread_mutex_lock(&security_ctx_mutex);
     if (runtime->nested_grants == 0) {
         for (i = 0; i < num_interp_memdoms_in_use; i++)
-            memdom_priv_add(runtime->interp_dom[i], MAIN_THREAD, MEMDOM_WRITE);
+            memdom_priv_add(runtime->interp_dom[i]->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
     }
     runtime->nested_grants++;
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -273,7 +284,7 @@ void pyr_revoke_critical_state_write() {
     // same optimization as above
     if (runtime->nested_grants == 0) {
         for (i = 0; i < num_interp_memdoms_in_use; i++)
-            memdom_priv_del(runtime->interp_dom[i], MAIN_THREAD, MEMDOM_WRITE);
+            memdom_priv_del(runtime->interp_dom[i]->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
     }
     pthread_mutex_unlock(&security_ctx_mutex);
 }
@@ -338,8 +349,8 @@ void pyr_callstack_req_listen() {
     smv_join_domain(MAIN_THREAD, smv_id);
     memdom_priv_add(MAIN_THREAD, smv_id, MEMDOM_READ | MEMDOM_WRITE);
     for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
-      smv_join_domain(runtime->interp_dom[i], smv_id);
-      memdom_priv_add(runtime->interp_dom[i], smv_id, MEMDOM_READ | MEMDOM_WRITE);
+      smv_join_domain(runtime->interp_dom[i]->memdom_id, smv_id);
+      memdom_priv_add(runtime->interp_dom[i]->memdom_id, smv_id, MEMDOM_READ | MEMDOM_WRITE);
     }
 
     smvthread_create_attr(smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
