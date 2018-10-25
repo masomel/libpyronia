@@ -137,7 +137,7 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
         goto fail;
 	}*/
 
-    for (i = 0; i < NUM_INTERP_DOMS; i++) {
+    for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
         // create the memdom first so this struct
         // can also be allocated in interp_dom
         if ((interp_memdom = memdom_create()) == -1) {
@@ -200,7 +200,7 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
 
     printf("[%s] Freed all native libs\n", __func__);
 
-    for (i = 0; i < NUM_INTERP_DOMS; i++) {
+    for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
         memdom_kill(c->interp_dom[i]);
     }
 

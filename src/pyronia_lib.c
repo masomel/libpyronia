@@ -129,25 +129,38 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
     if (!runtime)
         return NULL;
 
-    rlog("[%s] %lu bytes\n", __func__, size);
-
     pthread_mutex_lock(&security_ctx_mutex);
     for (i = 0; i < num_interp_memdoms_in_use; i++) {
         if (memdom_get_free_bytes(runtime->interp_dom[i]) >= size &&
             interp_dom_has_space[i]) {
             new_block = memdom_alloc(runtime->interp_dom[i], size);
 
-            if (new_block)
+            if (new_block) {
+	        rlog("[%s] Allocated %lu bytes in memdom %d\n", __func__, size, runtime->interp_dom[i]);
                 break;
+	    }
             else {
-                interp_dom_has_space[i] = false;
-                continue;
+	      interp_dom_has_space[i] = false;
+	      rlog("[%s] Memdom allocator could not find a suitable block in memdom %d. Current number of active memdoms: %d\n", __func__, runtime->interp_dom[i], num_interp_memdoms_in_use);
+	      if (num_interp_memdoms_in_use == runtime->interp_dom[i]) {
+		num_interp_memdoms_in_use++;
+	      }
             }
+        }
+	else {
+	  if (interp_dom_has_space[i])
+	    interp_dom_has_space[i] = false;
+	  if (num_interp_memdoms_in_use == runtime->interp_dom[i]) {
+	    rlog("[%s] Not enough space in any active memdoms. Current number of active memdoms: %d\n", __func__, num_interp_memdoms_in_use);
+	    num_interp_memdoms_in_use++;
+	  }
+	}
 
-        }
-        else if ((++num_interp_memdoms_in_use) <= MAX_NUM_INTERP_DOMS) {
-            continue;
-        }
+	// let's make sure we never have more than MAX_NUM_INTERP_DOMS active
+	if (num_interp_memdoms_in_use > MAX_NUM_INTERP_DOMS) {
+	  num_interp_memdoms_in_use = MAX_NUM_INTERP_DOMS;
+	  break;
+	}
     }
     pthread_mutex_unlock(&security_ctx_mutex);
     return new_block;
