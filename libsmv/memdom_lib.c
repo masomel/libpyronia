@@ -57,7 +57,7 @@ int memdom_kill(int memdom_id){
     return -1;
   }
 
-  printf("Peak allocation: %lu bytes\n", memdom[memdom_id]->peak_alloc);
+  printf("[%s] Memdom %d peak allocation: %lu bytes\n", __func__, memdom_id, memdom[memdom_id]->peak_alloc);
 
   /* Free mmap */
   if( memdom[memdom_id]->start ) {
@@ -266,17 +266,85 @@ static struct alloc_metadata *alloc_metadata_init(void *addr, size_t size) {
     return alloc;
 }
 
-/* Insert a free list struct to the head of memdom free list
- * Reclaimed chunks are inserted to head
+/* Insert a free chunk into the memdom free list in increasing by increasing start 
+ * address.
  */
-void free_list_insert_to_head(int memdom_id, struct alloc_metadata *new_free_list){
+void free_list_insert(int memdom_id, struct alloc_metadata *new_free){
   int rv;
   struct alloc_metadata *head = memdom[memdom_id]->free_list_head;
-  if( head ) {
-    new_free_list->next = head;
+  struct alloc_metadata *cur, *prev;
+  
+  if (!head) {
+    new_free->next = head;
+    memdom[memdom_id]->free_list_head = new_free;
+    rlog("[%s] Reclaiming first free chunk in memdom %d\n", __func__, memdom_id);
+    goto out;
   }
-  memdom[memdom_id]->free_list_head = new_free_list;
-  rlog("[%s] memdom %d inserted free list addr: %p, size: %lu\n", __func__, memdom_id, new_free_list->addr, new_free_list->size);
+  cur = memdom[memdom_id]->free_list_head;
+  prev = NULL;
+
+  while (cur) {
+    if (new_free->addr < cur->addr) {
+      new_free->next = cur;
+      rlog("[%s] Free chunk %p in memdom %d fits before current chunk %p\n", __func__, new_free->addr, memdom_id, cur->addr);
+
+      if (new_free->addr + new_free->size == cur->addr) {
+	// the new free chunk can be merged with cur
+	new_free->size += cur->size;
+	new_free->next = cur->next;
+	free(cur);
+	cur = new_free;
+	rlog("[%s] Merging free chunk %p with current in memdom %d\n", __func__, new_free->addr, memdom_id);
+      }
+      
+      if (!prev) {
+	// we're inserting a chunk before the current head of the list
+	memdom[memdom_id]->free_list_head = new_free;
+	rlog("[%s] Inserting free chunk %p in memdom %d at the head\n", __func__, new_free->addr, memdom_id);
+      }
+      else if (prev && new_free->addr > prev->addr) {
+	// we're inserting a chunk between two existing reclaimed chunks
+	prev->next = new_free;
+
+	rlog("[%s] Free chunk in memdom %d fits after previous chunk %p\n", __func__, memdom_id, prev->addr);
+
+	if (prev->addr + prev->size == new_free->addr) {
+	  // the new free chunk can be merged with prev
+	  prev->size += new_free->size;
+	  prev->next = new_free->next;
+	  free(new_free);
+	  cur = prev;
+
+	  rlog("[%s] Merging free chunk in memdom %d with previous\n",  __func__, memdom_id);
+	}
+      }    
+
+      goto out;
+    }
+    else if (cur->next == NULL && new_free->addr > cur->addr) {
+      // we're inserting the new chunk at the end of the free list
+      cur->next = new_free;
+
+      rlog("[%s] Inserting free chunk %p in memdom %d after free list tail %p \n", __func__, new_free->addr, memdom_id, cur->addr);
+      
+      if (cur->addr + cur->size == new_free->addr) {
+	// the new free chunk can be merged with cur
+	cur->size += new_free->size;
+	cur->next = new_free->next;
+	free(new_free);
+
+	rlog("[%s] Merging free chunk in memdom %d with current\n", __func__, memdom_id);
+      }
+      goto out;
+    }
+
+    prev = cur;
+    cur = cur->next;
+  }
+
+ out:
+  rlog("[%s] Free list head in memdom %d points at %p\n", __func__, memdom_id, memdom[memdom_id]->free_list_head->addr);
+  return;
 }
 
 /* Insert a free list struct to the head of memdom free list
@@ -456,14 +524,6 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
       allocs_insert_to_head(memdom_id, new_alloc);
       goto out;
     }
-    // check if this free chunk is contiguous with the previous chunk. Merge if they are
-    else if (prev && (prev->addr + prev->size == free_list->addr)) {
-        prev->size += free_list->size;
-        remove_alloc_metadata_from(free_list, &memdom[memdom_id]->free_list_head);
-        free(free_list);
-        free_list = prev;
-        continue;
-    }
 
     /* Move pointer forward */
     prev = free_list;
@@ -524,10 +584,11 @@ void memdom_free(void* data){
 
   /* Move this metadata from the allocs to the free list */
   remove_alloc_metadata_from(alloc, &memdom[memdom_id]->allocs);
-  free_list_insert_to_head(memdom_id, alloc);
+  memdom[memdom_id]->cur_alloc -= alloc->size;
+  dumpFreeListHead(memdom_id);
+  free_list_insert(memdom_id, alloc);
   rlog("[%s] allocs head: %p\n", __func__, memdom[memdom_id]->allocs);
   rlog("[%s] Move alloc to free list\n", __func__);
-  memdom[memdom_id]->cur_alloc -= alloc->size;
   rlog("Current allocations: %lu bytes\n", memdom[memdom_id]->cur_alloc);
 
   pthread_mutex_unlock(&memdom[memdom_id]->mlock);
