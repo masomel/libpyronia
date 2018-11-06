@@ -28,6 +28,7 @@ static int is_build = 0;
 static pthread_t recv_th;
 static int num_interp_memdoms_in_use = 1;
 static bool interp_dom_has_space[MAX_NUM_INTERP_DOMS];
+static bool has_write_access[MAX_NUM_INTERP_DOMS];
 
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
@@ -56,7 +57,7 @@ int pyr_init(const char *main_mod_path,
     pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
     pthread_mutex_init(&security_ctx_mutex, &attr);
     pthread_cond_init(&si_cond_var, NULL);
-
+    
     /* Register with the memdom subsystem */
     // We don't want the main thread's memdom to be
     // globally accessible, so init with 0.
@@ -68,7 +69,7 @@ int pyr_init(const char *main_mod_path,
 
     // create another SMV to be used by threads originally created by
     // pthread_create. We won't allow mixing pthreads woth smvthreads
-    pyr_smv_id = smv_create();
+    /*    pyr_smv_id = smv_create();
     if (pyr_smv_id == -1) {
       printf("[%s] Could not create an SMV for pyronia threads\n", __func__);
       goto out;
@@ -76,16 +77,20 @@ int pyr_init(const char *main_mod_path,
     // We need this SMV to be able to access any Python functions
     smv_join_domain(MAIN_THREAD, pyr_smv_id);
     memdom_priv_add(MAIN_THREAD, pyr_smv_id, MEMDOM_READ | MEMDOM_WRITE);
-
+    */
+    
     // init the mem management
     for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
         interp_dom_has_space[i] = true;
+	has_write_access[i] = false;
     }
 
     /* Initialize the runtime's security context */
     err = pyr_security_context_alloc(&runtime, collect_callstack_cb);
-    if (!err)
+    if (!err) {
+      has_write_access[0] = true;
       err = set_str(main_mod_path, &runtime->main_path);
+    }
     if (err) {
         printf("[%s] Runtime initialization failure\n", __func__);
         goto out;
@@ -106,13 +111,15 @@ int pyr_init(const char *main_mod_path,
         goto out;
     }
 
+    //    PyEval_InitThreads(); // needed to enable stack inspector
+    
     pyr_callstack_req_listen();
     pyr_is_inspecting(); // we want to wait for the listener to be ready
  out:
     if (policy)
       pyr_free_critical_state(policy);
     /* Revoke access to the interpreter domain now */
-    pyr_revoke_critical_state_write();
+    pyr_revoke_critical_state_write(NULL);
     if (!err)
       rlog("[%s] Initialized pyronia extensions\n", __func__);
     return err;
@@ -131,8 +138,8 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 
     pthread_mutex_lock(&security_ctx_mutex);
     for (i = 0; i < num_interp_memdoms_in_use; i++) {
-        if (memdom_get_free_bytes(runtime->interp_dom[i]->memdom_id) >= size
-            && interp_dom_has_space[i]) {
+        if (interp_dom_has_space[i] &&
+	    memdom_get_free_bytes(runtime->interp_dom[i]->memdom_id) >= size) {
             new_block = memdom_alloc(runtime->interp_dom[i]->memdom_id, size);
 
             if (new_block) {
@@ -234,8 +241,9 @@ int pyr_is_critical_state(void *op) {
 
 /** Grants the main thread write access to the interpreter domain.
  */
-void pyr_grant_critical_state_write() {
+void pyr_grant_critical_state_write(void *op) {
     int i = 0;
+    int op_dom = 0;
 
     if (is_build)
       return;
@@ -249,22 +257,49 @@ void pyr_grant_critical_state_write() {
         return;
     }
 
+    // if the caller has given us an insecure object, exit
+    if (op) {
+      op_dom = get_interp_dom_memdom(op);
+      rlog("[%s] grant access to obj %p?\n", __func__, op);
+      if (op_dom <= 0)
+	return;
+    }
+    
+    pthread_mutex_lock(&security_ctx_mutex);
+    // if the caller has given us an existing secure object to
+    // modify, we should just go ahead an grant that particular
+    // memdom the write access
+    if (op && !has_write_access[op_dom-1]) {
+      memdom_priv_add(op_dom, MAIN_THREAD, MEMDOM_WRITE);
+      has_write_access[op_dom-1] = true;
+      rlog("[%s] Granted write access to obj in memdom %d\n", __func__, op_dom);
+      goto out;
+    }
+
+    rlog("[%s] Grants: %d\n", __func__, runtime->nested_grants);
+    
     // slight optimization: if we've already granted access
     // let's avoid another downcall to change the memdom privileges
     // and simply keep track of how many times we've granted access
-    pthread_mutex_lock(&security_ctx_mutex);
-    if (runtime->nested_grants == 0) {
-        for (i = 0; i < num_interp_memdoms_in_use; i++)
-            memdom_priv_add(runtime->interp_dom[i]->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+    if (runtime->nested_grants == 0) {      
+      for (i = 0; i < num_interp_memdoms_in_use; i++) {
+	if (interp_dom_has_space[i]) {
+	  memdom_priv_add(runtime->interp_dom[i]->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+	  has_write_access[i] = true;
+	  rlog("[%s] Granted write access to memdom %d\n", __func__, runtime->interp_dom[i]->memdom_id);
+	}
+      }
     }
+ out:
     runtime->nested_grants++;
     pthread_mutex_unlock(&security_ctx_mutex);
 }
 
 /** Revokes the main thread's write privileges to the interpreter domain.
  */
-void pyr_revoke_critical_state_write() {
+void pyr_revoke_critical_state_write(void *op) {
     int i = 0;
+    int op_dom = 0;
     if (is_build)
       return;
 
@@ -277,15 +312,35 @@ void pyr_revoke_critical_state_write() {
         return;
     }
 
-    rlog("[%s] Number of grants: %d\n", __func__, runtime->nested_grants);
+    // if the caller has given us an insecure object, exit
+    if (op) {
+      op_dom = get_interp_dom_memdom(op);
+      rlog("[%s] revoke access from obj %p?\n", __func__, op);
+      if (op_dom <= 0)
+	return;
+    }
 
     pthread_mutex_lock(&security_ctx_mutex);
+    rlog("[%s] Number of grants: %d\n", __func__, runtime->nested_grants);
     runtime->nested_grants--;
+    if (op && runtime->nested_grants == 0) {
+      memdom_priv_del(op_dom, MAIN_THREAD, MEMDOM_WRITE);
+      has_write_access[op_dom-1] = false;
+      rlog("[%s] Revoked write access for obj in domain %d\n", __func__, op_dom);
+      goto out;
+    }
+    
     // same optimization as above
     if (runtime->nested_grants == 0) {
-        for (i = 0; i < num_interp_memdoms_in_use; i++)
-            memdom_priv_del(runtime->interp_dom[i]->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+      for (i = 0; i < num_interp_memdoms_in_use; i++) {
+	if (has_write_access[i]) {
+	  memdom_priv_del(runtime->interp_dom[i]->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+	  has_write_access[i] = false;
+	  rlog("[%s] Revoked write access to domain %d\n", __func__, runtime->interp_dom[i]->memdom_id);
+	}
+      }
     }
+ out:
     pthread_mutex_unlock(&security_ctx_mutex);
 }
 
@@ -297,7 +352,8 @@ void pyr_revoke_critical_state_write() {
  */
 int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
                       void*(fn)(void*), void* args) {
-    int ret = -1;
+    int ret = 0;
+    /*
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #undef pthread_create
 #endif
@@ -309,7 +365,8 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #define pthread_create(tid, attr, fn, args) pyr_thread_create(tid, attr, fn, args)
 #endif
-    rlog("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
+    */
+    printf("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
     return ret;
 }
 
@@ -372,7 +429,7 @@ void pyr_exit() {
     rlog("[%s] Exiting Pyronia runtime\n", __func__);
     pthread_cancel(recv_th);
     pyr_teardown_si_comm();
-    pyr_grant_critical_state_write();
+    pyr_grant_critical_state_write((void *)runtime->main_path);
     if (runtime->main_path)
       pyr_free_critical_state(runtime->main_path);
     pyr_security_context_free(&runtime);
@@ -384,6 +441,7 @@ void pyr_exit() {
 pyr_cg_node_t *pyr_collect_runtime_callstack() {
     pyr_cg_node_t *cg = NULL;
     cg = runtime->collect_callstack_cb();
+    rlog("[%s] Done collecting callstack\n", __func__);
     return cg;
 }
 

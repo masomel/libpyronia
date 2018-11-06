@@ -64,7 +64,7 @@ static int send_req(int netlink_socket, int type, int nl_cmd,
     struct {
         struct nlmsghdr n;
         struct genlmsghdr g;
-        char buf[1024];
+        char buf[2048];
     } req;
     struct nlattr *na;
 

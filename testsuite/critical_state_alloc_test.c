@@ -24,23 +24,23 @@ int main() {
   }
     
   for (i = 0; i < 1000; i++) {
-    pyr_grant_critical_state_write();
+    pyr_grant_critical_state_write(NULL);
     secure_alloc[i] = pyr_alloc_critical_runtime_state(strlen(to_copy)+1);
     if (secure_alloc[i] == NULL) {
       oom = i+1;
-      pyr_revoke_critical_state_write();
+      pyr_revoke_critical_state_write(NULL);
       break;
     }
     memcpy(secure_alloc[i], to_copy, strlen(to_copy)+1);
-    pyr_revoke_critical_state_write();
+    pyr_revoke_critical_state_write(NULL);
     printf("Allocated string %s:%d in secure memdom\n", secure_alloc[i], i);
   }
 
-  pyr_grant_critical_state_write();
+  pyr_grant_critical_state_write(NULL);
   for (i = 0; i < oom; i++) {
     pyr_free_critical_state(secure_alloc[i]);
   }
-  pyr_revoke_critical_state_write();
+  pyr_revoke_critical_state_write(NULL);
 
  out:
   pyr_exit();

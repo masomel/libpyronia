@@ -1,5 +1,8 @@
 from statistics import mean, median
 
+def calc_percent(new, orig):
+    return ((float(new)-float(orig))/float(orig)*100.0)
+
 f = open('hello-latency', 'r')
 latencies = f.readlines()
 f.close()
@@ -21,4 +24,4 @@ print("median: %.2f us" % median(with_pyr))
 print("mean: %.2f us" % mean(with_pyr))
 print("max: %.2f us" % max(with_pyr))
 print("")
-print("avg overhead: %dx" % int(float(mean(with_pyr))/float(mean(no_pyr))))
+print("avg overhead: %.2f %%" % calc_percent(mean(with_pyr), mean(no_pyr)))
