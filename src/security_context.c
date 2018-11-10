@@ -119,7 +119,9 @@ void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) 
   }*/
 
 int pyr_security_context_alloc(struct pyr_security_context **ctxp,
-                               pyr_cg_node_t *(*collect_callstack_cb)(void)) {
+                               pyr_cg_node_t *(*collect_callstack_cb)(void),
+			       void (*interpreter_lock_acquire_cb)(void),
+			       void (*interpreter_lock_release_cb)(void)) {
     int err = -1;
     struct pyr_security_context *c = NULL;
     int interp_memdom = -1;
@@ -137,22 +139,25 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
         goto fail;
 	}*/
 
+    // make sure everything's zerod out when we start
     for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
-        c->interp_dom[i] = malloc(sizeof(pyr_interp_dom_alloc_t));
-        if (!c->interp_dom[i])
-            goto fail;
-        if ((interp_memdom = memdom_create()) == -1) {
-            printf("[%s] Could not create interpreter dom # %d\n", __func__, i);
-            goto fail;
-        }
-        // don't forget to add the main thread to this memdom
-        smv_join_domain(interp_memdom, MAIN_THREAD);
-        memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-        
-        c->interp_dom[i]->memdom_id = interp_memdom;
-        c->interp_dom[i]->start = NULL;
-        c->interp_dom[i]->end = NULL;
+      c->interp_dom[i] = NULL;
     }
+    
+    c->interp_dom[0] = malloc(sizeof(pyr_interp_dom_alloc_t));
+    if (!c->interp_dom[0])
+      goto fail;
+    if ((interp_memdom = memdom_create()) == -1) {
+      printf("[%s] Could not create interpreter dom # %d\n", __func__, 0);
+      goto fail;
+    }
+    // don't forget to add the main thread to this memdom
+    smv_join_domain(interp_memdom, MAIN_THREAD);
+    memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+    
+    c->interp_dom[0]->memdom_id = interp_memdom;
+    c->interp_dom[0]->start = NULL;
+    c->interp_dom[0]->end = NULL;
 
     c->main_path = NULL;
     // this ensures that we really do revoke write access at the end of pyr_init
@@ -164,6 +169,8 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
         goto fail;
 	}*/
     c->collect_callstack_cb = collect_callstack_cb;
+    c->interpreter_lock_acquire_cb = interpreter_lock_acquire_cb;
+    c->interpreter_lock_release_cb = interpreter_lock_release_cb;
 
     // this list will be added to whenever a new non-builtin extenion
     // is loaded via dlopen
@@ -199,13 +206,16 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
 
     printf("[%s] Freeing security context %p\n", __func__, c);
 
-    pyr_native_lib_context_free(&c->native_libs);
+    //pyr_native_lib_context_free(&c->native_libs);
 
     printf("[%s] Freed all native libs\n", __func__);
 
     for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
-        memdom_free(c->interp_dom[i]->start);
-        memdom_kill(c->interp_dom[i]->memdom_id);
+      if (c->interp_dom[i]) {
+	if (c->interp_dom[i]->start)
+	  memdom_free(c->interp_dom[i]->start);
+	memdom_kill(c->interp_dom[i]->memdom_id);
+      }
     }
 
     free(c);

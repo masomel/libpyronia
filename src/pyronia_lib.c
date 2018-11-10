@@ -24,6 +24,7 @@
 
 static struct pyr_security_context *runtime = NULL;
 static int pyr_smv_id = -1;
+static int si_smv_id = -1;
 static int is_build = 0;
 static pthread_t recv_th;
 static int num_interp_memdoms_in_use = 1;
@@ -37,7 +38,9 @@ static bool has_write_access[MAX_NUM_INTERP_DOMS];
  */
 int pyr_init(const char *main_mod_path,
              const char *lib_policy_file,
-             pyr_cg_node_t *(*collect_callstack_cb)(void)) {
+             pyr_cg_node_t *(*collect_callstack_cb)(void),
+	     void (*interpreter_lock_acquire_cb)(void),
+	     void (*interpreter_lock_release_cb)(void)) {
     int err = 0, i = 0;
     char *policy = NULL;
     pthread_mutexattr_t attr;
@@ -86,7 +89,9 @@ int pyr_init(const char *main_mod_path,
     }
 
     /* Initialize the runtime's security context */
-    err = pyr_security_context_alloc(&runtime, collect_callstack_cb);
+    err = pyr_security_context_alloc(&runtime, collect_callstack_cb,
+				     interpreter_lock_acquire_cb,
+				     interpreter_lock_release_cb);
     if (!err) {
       has_write_access[0] = true;
       err = set_str(main_mod_path, &runtime->main_path);
@@ -125,6 +130,34 @@ int pyr_init(const char *main_mod_path,
     return err;
 }
 
+static void new_interp_memdom() {
+  int interp_memdom = -1;
+  int idx = num_interp_memdoms_in_use;
+  runtime->interp_dom[idx] = malloc(sizeof(pyr_interp_dom_alloc_t));
+  if (!runtime->interp_dom[idx])
+    goto fail;
+  interp_memdom = memdom_create();
+  if(interp_memdom == -1) {
+    printf("[%s] Could not create interpreter dom # %d\n", __func__, idx);
+    goto fail;
+  }
+  // don't forget to add the main thread to this memdom
+  smv_join_domain(interp_memdom, MAIN_THREAD);
+  memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+  
+  runtime->interp_dom[idx]->memdom_id = interp_memdom;
+  runtime->interp_dom[idx]->start = NULL;
+  runtime->interp_dom[idx]->end = NULL;
+
+  smv_join_domain(runtime->interp_dom[idx]->memdom_id, si_smv_id);
+  memdom_priv_add(runtime->interp_dom[idx]->memdom_id, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
+  num_interp_memdoms_in_use++;
+  return;
+ fail:
+  if (runtime->interp_dom[idx])
+    free(runtime->interp_dom[idx]);
+}
+
 /** Wrapper around memdom_alloc in the interpreter domain.
  */
 void *pyr_alloc_critical_runtime_state(size_t size) {
@@ -156,7 +189,8 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 	      interp_dom_has_space[i] = false;
 	      rlog("[%s] Memdom allocator could not find a suitable block in memdom %d. Current number of active memdoms: %d\n", __func__, runtime->interp_dom[i]->memdom_id, num_interp_memdoms_in_use);
 	      if (num_interp_memdoms_in_use == runtime->interp_dom[i]->memdom_id) {
-		num_interp_memdoms_in_use++;
+		//num_interp_memdoms_in_use++;
+		new_interp_memdom();
 	      }
             }
         }
@@ -165,7 +199,8 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 	    interp_dom_has_space[i] = false;
 	  if (num_interp_memdoms_in_use == runtime->interp_dom[i]->memdom_id) {
 	    rlog("[%s] Not enough space in any active memdoms. Current number of active memdoms: %d\n", __func__, num_interp_memdoms_in_use);
-	    num_interp_memdoms_in_use++;
+	    //num_interp_memdoms_in_use++;
+	    new_interp_memdom();
 	  }
 	}
 
@@ -389,28 +424,25 @@ int pyr_run_native_func_isolated(const char *lib, void *(*func)(void)) {
  */
 void pyr_callstack_req_listen() {
     pthread_attr_t attr;
-    int smv_id = -1;
     int i = 0;
 
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-    smv_id = smv_create();
-    if (smv_id == -1) {
+    si_smv_id = smv_create();
+    if (si_smv_id == -1) {
       printf("[%s] Could not create and SMV for the SI thread\n", __func__);
       return;
     }
 
     // we trust this thread, but also, we need this thread to be able
     // to access the functions
-    smv_join_domain(MAIN_THREAD, smv_id);
-    memdom_priv_add(MAIN_THREAD, smv_id, MEMDOM_READ | MEMDOM_WRITE);
-    for (i = 0; i < MAX_NUM_INTERP_DOMS; i++) {
-      smv_join_domain(runtime->interp_dom[i]->memdom_id, smv_id);
-      memdom_priv_add(runtime->interp_dom[i]->memdom_id, smv_id, MEMDOM_READ | MEMDOM_WRITE);
-    }
+    smv_join_domain(MAIN_THREAD, si_smv_id);
+    memdom_priv_add(MAIN_THREAD, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
+    smv_join_domain(runtime->interp_dom[0]->memdom_id, si_smv_id);
+    memdom_priv_add(runtime->interp_dom[0]->memdom_id, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
 
-    smvthread_create_attr(smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
+    smvthread_create_attr(si_smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
 }
 
 int pyr_is_interpreter_build() {
@@ -440,7 +472,9 @@ void pyr_exit() {
  */
 pyr_cg_node_t *pyr_collect_runtime_callstack() {
     pyr_cg_node_t *cg = NULL;
+    runtime->interpreter_lock_acquire_cb();
     cg = runtime->collect_callstack_cb();
+    runtime->interpreter_lock_release_cb();
     rlog("[%s] Done collecting callstack\n", __func__);
     return cg;
 }

@@ -37,6 +37,8 @@ static int pyr_to_kernel(int nl_cmd, int nl_attr, char *msg) {
   else
       m = msg;
 
+  printf("[%s] Sending message %s\n", __func__, m);
+  
   err = send_message(nl_socket_get_fd(si_sock), nl_fam, nl_cmd, nl_attr, si_port, m);
   
  out:
