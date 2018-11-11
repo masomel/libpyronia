@@ -1,5 +1,5 @@
 import tweepy
-import time
+#import time
 import random
 from subprocess import call
 #from datetime import datetime
@@ -8,7 +8,7 @@ from cv2 import imread
 #import msgformat
 
 #These are the phrases variables that will be sent with the tweet
-tweet = ['A tweet from my pi  ', 'Hello!  ']
+tweet = ['A tweet from my pi with pyronia', 'Hello!  ']
 
 #while True:
 

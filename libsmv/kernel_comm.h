@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdint.h>
 
+#define MAX_MSG_SIZE_BYTES 3000
+
 #ifdef __cplusplus
 extern "C" {
 #endif
