@@ -10,16 +10,9 @@
 
 #include <stdbool.h>
 
+#include "data_obj.h"
+
 #define MAX_NUM_INTERP_DOMS 200
-
-struct pyr_native_lib_context {
-    char *library_name; // runtimes also identify libraries by string name
-    int memdom_id; // the memdom this native library belongs to
-    // points to the next native lib context in the linked list
-    struct pyr_native_lib_context *next;
-};
-
-typedef struct pyr_native_lib_context pyr_native_ctx_t;
 
 struct pyr_interp_dom_alloc {
     int memdom_id;
@@ -40,7 +33,9 @@ typedef struct pyr_cg_node pyr_cg_node_t;
  * Used for pyronia-related bookkeeping */
 struct pyr_security_context {
     char *main_path;
-    pyr_native_ctx_t *native_libs;
+    pyr_func_sandbox_t *func_sandboxes;
+    obj_list_t *data_objs_list;
+    dom_list_t *obj_domains_list;
     pyr_interp_dom_alloc_t *interp_doms;
     /* The runtime may grant write access to the critical state
      * in a function that calls another function that grants access
@@ -59,14 +54,14 @@ struct pyr_security_context {
 extern "C" {
 #endif
 
-    int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
-                                   pyr_native_ctx_t *next);
     int pyr_security_context_alloc(struct pyr_security_context **ctxp,
                                    pyr_cg_node_t *(*collect_callstack_cb)(void),
-				   void (*interpreter_lock_acquire_cb)(void),
-				   void (*interpreter_lock_release_cb)(void));
-    int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib);
+                                   void (*interpreter_lock_acquire_cb)(void),
+                                   void (*interpreter_lock_release_cb)(void));
+    pyr_data_obj_domain_t *pyr_find_obj_domain(char *domain_label);
     void pyr_security_context_free(struct pyr_security_context **ctxp);
+    int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
+                                 struct pyr_security_context **ctx);
 
 #ifdef __cplusplus
 }

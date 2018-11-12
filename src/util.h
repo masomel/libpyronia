@@ -39,4 +39,27 @@ static inline int set_str(const char *src, char **dest) {
   return err;
 }
 
+static inline int copy_str(char *src, char **dest) {
+    char *str = NULL;
+    int err = 0;
+
+    // let's make sure to not override a non-null
+    // destination
+    if (*dest)
+        return 0;
+
+    str = malloc(strlen(src)+1);
+    if (!str) {
+        err = -1;
+        goto out;
+    }
+
+    memset(str, 0, strlen(src)+1);
+    memcpy(str, src, strlen(src));
+
+ out:
+    *dest = str;
+    return err;
+}
+
 #endif /* __PYR_UTIL_H */

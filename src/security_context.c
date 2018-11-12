@@ -10,118 +10,321 @@
 
 #include "security_context.h"
 #include "util.h"
+#include "serialization.h"
 
-static void pyr_native_lib_context_free(pyr_native_ctx_t **ctxp) {
-    pyr_native_ctx_t *c = *ctxp;
-    int memdom_id = -1;
-
-    if (!c)
+void free_pyr_data_obj(pyr_data_obj_t **objp) {
+    pyr_data_obj_t *o = *objp;
+    if (!o)
         return;
 
-    if (c->next != NULL)
-        pyr_native_lib_context_free(&c->next);
+    if (o->name)
+        free(o->name);
+    if (o->domain_label)
+        free(o->domain_label);
 
-    printf("[%s] Native context for lib %s\n", __func__, c->library_name);
 
-    if (c->library_name)
-        memdom_free(c->library_name);
-    if (c->memdom_id > 0) {
-        memdom_id = c->memdom_id;
-        memdom_free(c);
-        memdom_kill(memdom_id);
-    }
-    *ctxp = NULL;
+    free(o);
+    *objp = NULL;
 }
 
-/* This functions allocates a new native library context.
- * A new memory domain is created as part of this process
- * so the native library can loaded into the memory domain
- * on dynload time.
- * Note: This function must be called BEFORE the native module
- * is loaded */
-int pyr_new_native_lib_context(pyr_native_ctx_t **ctxp, const char *lib,
-                               pyr_native_ctx_t *next) {
+void free_pyr_data_obj_domain(pyr_data_obj_domain_t **domp) {
+    pyr_data_obj_domain_t *d = *domp;
+    if (!d)
+        return;
+
+    if (d->label)
+        free(d->label);
+
+    if (d->memdom_id > 0)
+        memdom_kill(d->memdom_id);
+    free(d);
+    *domp = NULL;
+}
+
+void free_dom_list(struct dom_list **dlp) {
+    struct dom_list *dl = *dlp;
+    if (!dl)
+        return;
+
+    if (!dl->next)
+        free_dom_list(&dl->next);
+
+    if (dl->domain)
+        free_pyr_data_obj_domain(&dl->domain);
+
+    free(dl);
+    *dlp = NULL;
+}
+
+void free_obj_list(struct obj_list **olp) {
+    struct obj_list *ol = *olp;
+    if (!ol)
+        return;
+
+    if (!ol->next)
+        free_obj_list(&ol->next);
+
+    if (ol->obj)
+        free_pyr_data_obj(&ol->obj);
+
+    free(ol);
+    *olp = NULL;
+}
+
+void free_pyr_func_sandbox(pyr_func_sandbox_t **sbp) {
+    pyr_func_sandbox_t *s = *sbp;
+    if (!s)
+        return;
+
+    if (s->func_name)
+        free(s->func_name);
+
+    if (s->read_only)
+        free_dom_list(&s->read_only);
+
+    if (s->read_write)
+        free_dom_list(&s->read_write);
+
+    free(s);
+    *sbp = NULL;
+}
+
+
+// the caller has checked that the domain for this object exists
+int new_pyr_data_obj(pyr_data_obj_t **objp,
+                     char *name, char *dom_label) {
     int err = -1;
-    pyr_native_ctx_t *c = NULL;
+    pyr_data_obj_t *o = NULL;
 
-    c = pyr_alloc_critical_runtime_state(sizeof(pyr_native_ctx_t));
-    if (!c)
-        return -ENOMEM;
-
-    if (set_str(lib, &c->library_name))
+    o = malloc(sizeof(pyr_data_obj_t));
+    if (!o)
         goto fail;
 
-    c->memdom_id = memdom_create();
-    if (c->memdom_id == -1) {
-        err = -EINVAL;
+    if (copy_str(name, &o->name))
         goto fail;
-    }
+    if(copy_str(dom_label, &o->domain_label))
+        goto fail;
+    o->addr = NULL;
 
-    c->next = next;
-
-    *ctxp = c;
+    *objp = o;
     return 0;
  fail:
-    pyr_native_lib_context_free(&c);
-    *ctxp = NULL;
+    if (o)
+        free_pyr_data_obj(&o);
+    *objp = NULL;
     return err;
 }
 
-/* Insert a new allocation record at the head of the list.
- * Note: expects caller to hold the memdom lock and the context mutex.
-int pyr_add_new_alloc_record(struct pyr_security_context *ctx,
-                                void *addr) {
-    struct allocation_record *r = NULL;
-    if (!ctx || !addr)
-      return -1;
+// the caller has checked that the domain for this object exists
+int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
+                            char *label) {
+    int err = -1;
+    pyr_data_obj_domain_t *d = NULL;
 
-    r = memdom_alloc(ctx->interp_dom, sizeof(struct allocation_record));
-    if (!r) {
-      return -1;
+    d = malloc(sizeof(pyr_data_obj_domain_t));
+    if (!d)
+        goto fail;
+
+    if (copy_str(label, &d->label))
+        goto fail;
+
+    d->memdom_id = memdom_create();
+    if (d->memdom_id <= 0) {
+        goto fail;
     }
 
-    r->addr = addr;
-    r->next = ctx->alloc_blocks;
-    ctx->alloc_blocks = r;
-    printf("[%s] Allocated new block for addr %p at %p\n", __func__, addr, r);
+    *domp = d;
     return 0;
+ fail:
+    if (d)
+        free_pyr_data_obj_domain(&d);
+    *domp = NULL;
+    return err;
 }
 
-/* Remove the allocation record for the given address.
- * Assumes the address will be freed by the caller.
- * Note: expects the caller to hold the context mutex
-void pyr_remove_allocation_record(struct pyr_security_context *ctx, void *addr) {
-  struct allocation_record *runner = NULL, *tmp = NULL;
+int new_pyr_func_sandbox(pyr_func_sandbox_t **sbp, char *func_name) {
+    int err = -1;
+    pyr_func_sandbox_t *s = NULL;
 
-  if (!ctx || !ctx->alloc_blocks)
-    return;
-  
-  runner = ctx->alloc_blocks;
+    s = malloc(sizeof(pyr_func_sandbox_t));
+    if (!s)
+        goto fail;
 
-  // check if first entry is the one we need to remove
-  if (runner && runner->addr == addr) {
-    ctx->alloc_blocks = runner->next;
-    memdom_free(runner);
-    return;
-  }
-  
-  while(runner->next) {
-    if (runner->next->addr == addr) {
-      tmp = runner->next;
-      runner->next = tmp->next;
-      memdom_free(tmp);
-      tmp = NULL;
-      printf("[%s] Removed block for addr %p\n", __func__, addr);
-      break;
+    if (copy_str(func_name, &s->func_name))
+        goto fail;
+
+    s->read_only = NULL;
+    s->read_write = NULL;
+    s->next = NULL;
+
+    *sbp = s;
+    return 0;
+ fail:
+    if (s)
+        free_pyr_func_sandbox(&s);
+    *sbp = NULL;
+    return err;
+}
+
+static pyr_func_sandbox_t *find_sandbox(char *func_name,
+                                        pyr_func_sandbox_t *sb_list) {
+    pyr_func_sandbox_t *cur_sb = sb_list;
+
+    while(cur_sb) {
+        if (!strncmp(cur_sb->func_name, func_name, strlen(cur_sb->func_name)))
+            goto out;
+        cur_sb = cur_sb->next;
     }
-    runner = runner->next;
-  }
-  }*/
+ out:
+    return cur_sb;
+}
+
+static pyr_data_obj_domain_t *find_domain(char *domain_label,
+                                          struct dom_list *dom_list) {
+    struct dom_list *cur_dom = dom_list;
+    pyr_data_obj_domain_t *dom = NULL;
+
+    while(cur_dom) {
+        if (!strncmp(cur_dom->domain->label, domain_label,
+                     strlen(cur_dom->domain->label))) {
+            dom = cur_dom->domain;
+            goto out;
+        }
+        cur_dom = cur_dom->next;
+    }
+ out:
+    return dom;
+}
+
+static pyr_data_obj_t *find_data_obj(char *obj_name,
+                                     struct obj_list *obj_list) {
+    struct obj_list *cur_obj = obj_list;
+    pyr_data_obj_t *obj = NULL;
+
+    while(cur_obj) {
+        if (!strncmp(cur_obj->obj->name, obj_name,
+                     strlen(cur_obj->obj->name))) {
+            obj = cur_obj->obj;
+            goto out;
+        }
+        cur_obj = cur_obj->next;
+    }
+ out:
+    return obj;
+}
+
+static void insert_new_domain(pyr_data_obj_domain_t *dom,
+                              struct dom_list **list) {
+    struct dom_list *item = NULL;
+    item = malloc(sizeof(struct dom_list));
+    if (!item)
+        return;
+
+    item->domain = dom;
+    item->next = *list;
+    *list = item;
+}
+
+static void insert_new_data_obj(pyr_data_obj_t *obj,
+                              struct obj_list **list) {
+    struct obj_list *item = NULL;
+    item = malloc(sizeof(struct obj_list));
+    if (!item)
+        return;
+
+    item->obj = obj;
+    item->next = *list;
+    *list = item;
+}
+
+void *pyr_data_obj_alloc(char *name, size_t size);
+void pyr_data_obj_free(char *name, void *addr);
+
+// Deserialize a lib policy string received from userspace
+// profile is NOT NULL
+int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
+                             struct pyr_security_context **ctx) {
+    int err = -1;
+    char *next_rule, obj_marker, *obj_name, *dom_label, *func_name;
+    int i = 0;
+    int is_rw = 0;
+    pyr_data_obj_domain_t *dom = NULL;
+    pyr_data_obj_t *obj = NULL;
+    pyr_func_sandbox_t *func_sb = NULL;
+
+    for (i = 0; i < num_rules; i++) {
+        next_rule = obj_rules[i];
+        if (!next_rule)
+            goto malformed;
+
+        obj_marker = next_rule[0];
+        if (obj_marker == '+') {
+            is_rw = 1;
+        }
+        else if (obj_marker != '-') {
+            goto malformed;
+        }
+        if (is_rw)
+            strsep(&next_rule, RW_DATA_OBJ_MARKER);
+        else
+            strsep(&next_rule, RO_DATA_OBJ_MARKER);
+
+        printf("[%s] Parsing %s rule %s\n", __func__,
+               (is_rw ? "RW" : "RO"), next_rule);
+
+        obj_name = strsep(&next_rule, DOMAIN_DELIM);
+        if (!obj_name) {
+            goto malformed;
+        }
+        dom_label = strsep(&next_rule, FUNC_NAME_DELIM);
+        if (!dom_label) {
+            goto malformed;
+        }
+        func_name = strsep(&next_rule, LIB_RULE_DELIM);
+        if (!func_name)
+            goto malformed;
+
+        // let's create all new data structures and insert them
+        // into our security context if they don't exist yet
+        dom = find_domain(dom_label, (*ctx)->obj_domains_list);
+        if (!dom) {
+            err = new_pyr_data_obj_domain(&dom, dom_label);
+            insert_new_domain(dom, &(*ctx)->obj_domains_list);
+        }
+
+        obj = find_data_obj(obj_name, (*ctx)->data_objs_list);
+        if (!obj) {
+            err = new_pyr_data_obj(&obj, obj_name, dom_label);
+            insert_new_data_obj(obj, &(*ctx)->data_objs_list);
+        }
+
+        func_sb = find_sandbox(func_name, (*ctx)->func_sandboxes);
+        if (!func_sb) {
+            new_pyr_func_sandbox(&func_sb, func_name);
+            func_sb->next = (*ctx)->func_sandboxes;
+            (*ctx)->func_sandboxes = func_sb;
+        }
+
+        // now we can actually determine the access rule
+        if (is_rw && !find_domain(dom_label, func_sb->read_write))
+            insert_new_domain(dom, &func_sb->read_write);
+        else if (!is_rw && !find_domain(dom_label, func_sb->read_only))
+            insert_new_domain(dom, &func_sb->read_only);
+    }
+    goto out;
+
+ malformed:
+    printf("[%s] Malformed data object policy rule %s\n", __func__,
+           obj_rules[i]);
+    err = -1;
+ out:
+    return err;
+}
 
 int pyr_security_context_alloc(struct pyr_security_context **ctxp,
                                pyr_cg_node_t *(*collect_callstack_cb)(void),
-			       void (*interpreter_lock_acquire_cb)(void),
-			       void (*interpreter_lock_release_cb)(void)) {
+                               void (*interpreter_lock_acquire_cb)(void),
+                               void (*interpreter_lock_release_cb)(void)) {
     int err = -1;
     struct pyr_security_context *c = NULL;
     int interp_memdom = -1;
@@ -131,7 +334,11 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     c = malloc(sizeof(struct pyr_security_context));
     if (!c)
       goto fail;
-    
+
+    c->func_sandboxes = NULL;
+    c->data_objs_list = NULL;
+    c->obj_domains_list = NULL;
+
     c->interp_doms = malloc(sizeof(pyr_interp_dom_alloc_t));
     if (!c->interp_doms)
       goto fail;
@@ -139,11 +346,11 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
       printf("[%s] Could not create interpreter dom # %d\n", __func__, 1);
       goto fail;
     }
-    
+
     // don't forget to add the main thread to this memdom
     smv_join_domain(interp_memdom, MAIN_THREAD);
     memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-    
+
     c->interp_doms->memdom_id = interp_memdom;
     c->interp_doms->start = NULL;
     c->interp_doms->end = NULL;
@@ -159,15 +366,11 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
         printf("[%s] Need non-null callstack collect callback\n", __func__);
         err = -EINVAL;
         goto fail;
-	}*/
+        }*/
     c->collect_callstack_cb = collect_callstack_cb;
     c->interpreter_lock_acquire_cb = interpreter_lock_acquire_cb;
     c->interpreter_lock_release_cb = interpreter_lock_release_cb;
 
-    // this list will be added to whenever a new non-builtin extenion
-    // is loaded via dlopen
-    c->native_libs = NULL;
-    
     *ctxp = c;
     return 0;
  fail:
@@ -175,18 +378,6 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
       free(c);
     *ctxp = NULL;
     return err;
-}
-
-int pyr_find_native_lib_memdom(pyr_native_ctx_t *start, const char *lib) {
-    pyr_native_ctx_t *runner = start;
-
-    while (runner != NULL) {
-        if (!strncmp(runner->library_name, lib, strlen(lib))) {
-            printf("[%s] Found memdom %d\n", __func__, runner->memdom_id);
-            return runner->memdom_id;
-        }
-    }
-    return -1;
 }
 
 static void free_interp_doms(pyr_interp_dom_alloc_t **domp) {
@@ -216,8 +407,9 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
 
     rlog("[%s] Freeing security context %p\n", __func__, c);
 
-    //pyr_native_lib_context_free(&c->native_libs);
-
+    free_obj_list(&c->data_objs_list);
+    free_dom_list(&c->obj_domains_list);
+    free_pyr_func_sandbox(&c->func_sandboxes);
     free_interp_doms(&c->interp_doms);
     free(c);
     *ctxp = NULL;
