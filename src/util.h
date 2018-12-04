@@ -57,6 +57,9 @@ static inline int copy_str(char *src, char **dest) {
     memset(str, 0, strlen(src)+1);
     memcpy(str, src, strlen(src));
 
+    printf("[%s] copied string: %s (%p)\n", __func__,
+	   str, &str);
+    
  out:
     *dest = str;
     return err;

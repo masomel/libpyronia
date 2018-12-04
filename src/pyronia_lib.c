@@ -97,7 +97,7 @@ int pyr_init(const char *main_mod_path,
     }
 
     /* Parse the library policy from disk */
-    err = pyr_parse_lib_policy(lib_policy_file, &policy, obj_policy,
+    err = pyr_parse_lib_policy(lib_policy_file, &policy, &obj_policy,
                                &num_obj_rules);
     if (err < 0) {
       printf("[%s] Parsing lib policy failure: %d\n", __func__, err);

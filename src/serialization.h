@@ -23,7 +23,7 @@ extern "C" {
 
     int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack);
     int pyr_parse_lib_policy(const char *policy_fname, char **parsed,
-                             char **parsed_obj_rules, int *num_rules);
+                             char ***parsed_obj_rules, int *num_rules);
 
 #ifdef __cplusplus
 }

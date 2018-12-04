@@ -22,7 +22,6 @@ void free_pyr_data_obj(pyr_data_obj_t **objp) {
     if (o->domain_label)
         free(o->domain_label);
 
-
     free(o);
     *objp = NULL;
 }
@@ -32,12 +31,14 @@ void free_pyr_data_obj_domain(pyr_data_obj_domain_t **domp) {
     if (!d)
         return;
 
+    if (d->memdom_id > 0)
+      memdom_kill(d->memdom_id);
+    
     if (d->label)
         free(d->label);
 
-    if (d->memdom_id > 0)
-        memdom_kill(d->memdom_id);
     free(d);
+    d = NULL;
     *domp = NULL;
 }
 
@@ -50,8 +51,8 @@ void free_dom_list(struct dom_list **dlp) {
         free_dom_list(&dl->next);
 
     if (dl->domain)
-        free_pyr_data_obj_domain(&dl->domain);
-
+      free_pyr_data_obj_domain(&dl->domain);
+    
     free(dl);
     *dlp = NULL;
 }
@@ -79,16 +80,19 @@ void free_pyr_func_sandbox(pyr_func_sandbox_t **sbp) {
     if (s->func_name)
         free(s->func_name);
 
+    // domains are freed by free_dom_list in pyr_security_context_free
+    // which is called before this function
+    /*printf("[%s] freeing read-only\n", __func__);
     if (s->read_only)
         free_dom_list(&s->read_only);
 
+    printf("[%s] freeing read-write\n", __func__);
     if (s->read_write)
         free_dom_list(&s->read_write);
-
+    */
     free(s);
     *sbp = NULL;
 }
-
 
 // the caller has checked that the domain for this object exists
 int new_pyr_data_obj(pyr_data_obj_t **objp,
@@ -100,11 +104,14 @@ int new_pyr_data_obj(pyr_data_obj_t **objp,
     if (!o)
         goto fail;
 
+    o->name = NULL;
+    o->domain_label = NULL;
+    o->addr = NULL;
+    
     if (copy_str(name, &o->name))
         goto fail;
     if(copy_str(dom_label, &o->domain_label))
         goto fail;
-    o->addr = NULL;
 
     *objp = o;
     return 0;
@@ -125,6 +132,9 @@ int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
     if (!d)
         goto fail;
 
+    d->label = NULL;
+    d->memdom_id = -1;
+    
     if (copy_str(label, &d->label))
         goto fail;
 
@@ -150,12 +160,13 @@ int new_pyr_func_sandbox(pyr_func_sandbox_t **sbp, char *func_name) {
     if (!s)
         goto fail;
 
-    if (copy_str(func_name, &s->func_name))
-        goto fail;
-
+    s->func_name = NULL;
     s->read_only = NULL;
     s->read_write = NULL;
     s->next = NULL;
+
+    if (copy_str(func_name, &s->func_name))
+        goto fail;
 
     *sbp = s;
     return 0;
@@ -226,15 +237,15 @@ static void insert_new_domain(pyr_data_obj_domain_t *dom,
 }
 
 static void insert_new_data_obj(pyr_data_obj_t *obj,
-                              struct obj_list **list) {
+				struct pyr_security_context *ctx) {
     struct obj_list *item = NULL;
     item = malloc(sizeof(struct obj_list));
     if (!item)
         return;
-
+ 
     item->obj = obj;
-    item->next = *list;
-    *list = item;
+    item->next = ctx->data_objs_list;
+    ctx->data_objs_list = item;
 }
 
 void *pyr_data_obj_alloc(char *name, size_t size);
@@ -269,7 +280,7 @@ int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
         else
             strsep(&next_rule, RO_DATA_OBJ_MARKER);
 
-        printf("[%s] Parsing %s rule %s\n", __func__,
+        rlog("[%s] Parsing %s rule %s\n", __func__,
                (is_rw ? "RW" : "RO"), next_rule);
 
         obj_name = strsep(&next_rule, DOMAIN_DELIM);
@@ -295,7 +306,7 @@ int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
         obj = find_data_obj(obj_name, (*ctx)->data_objs_list);
         if (!obj) {
             err = new_pyr_data_obj(&obj, obj_name, dom_label);
-            insert_new_data_obj(obj, &(*ctx)->data_objs_list);
+            insert_new_data_obj(obj, *ctx);
         }
 
         func_sb = find_sandbox(func_name, (*ctx)->func_sandboxes);
@@ -390,7 +401,7 @@ static void free_interp_doms(pyr_interp_dom_alloc_t **domp) {
     if (d->next != NULL)
         free_interp_doms(&d->next);
 
-    printf("[%s] Interpreter allocation meta for memdom %d\n", __func__, d->memdom_id);
+    rlog("[%s] Interpreter allocation meta for memdom %d\n", __func__, d->memdom_id);
 
     if (d->start)
       memdom_free(d->start);
