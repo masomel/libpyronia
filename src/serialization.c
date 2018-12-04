@@ -121,7 +121,7 @@ static int read_policy_file(const char *policy_fname, char **buf) {
  * and serializes it for registration with the LSM and the runtime.
  */
 int pyr_parse_lib_policy(const char *policy_fname, char **parsed,
-                         char **parsed_obj_rules, int *num_rules) {
+                         char ***parsed_obj_rules, int *num_rules) {
 
     int rule_len;
     char *ser = NULL, *out = NULL, *tmp_ser = NULL;
@@ -165,8 +165,10 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed,
 
         // this is a data object rule, so keep is aside, and
         // deal with it later
-        if (ser[0] == '-' || ser[0] == '+') {
-            obj_rules[obj_rule_count] = ser;
+        if (next_rule[0] == '-' || next_rule[0] == '+') {
+            obj_rules[obj_rule_count] = next_rule;
+	    printf("[%s] Found new object rule: %s\n", __func__,
+		   obj_rules[obj_rule_count]);
             obj_rule_count++;
         }
         else {
@@ -224,6 +226,6 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed,
     if (ser)
         free(ser);
     *parsed = out;
-    parsed_obj_rules = out_obj_rules;
+    *parsed_obj_rules = out_obj_rules;
     return ret;
 }
