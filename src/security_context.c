@@ -33,7 +33,7 @@ void free_pyr_data_obj_domain(pyr_data_obj_domain_t **domp) {
 
     if (d->memdom_id > 0)
       memdom_kill(d->memdom_id);
-    
+
     if (d->label)
         free(d->label);
 
@@ -52,7 +52,7 @@ void free_dom_list(struct dom_list **dlp) {
 
     if (dl->domain)
       free_pyr_data_obj_domain(&dl->domain);
-    
+
     free(dl);
     *dlp = NULL;
 }
@@ -107,7 +107,7 @@ int new_pyr_data_obj(pyr_data_obj_t **objp,
     o->name = NULL;
     o->domain_label = NULL;
     o->addr = NULL;
-    
+
     if (copy_str(name, &o->name))
         goto fail;
     if(copy_str(dom_label, &o->domain_label))
@@ -134,7 +134,7 @@ int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
 
     d->label = NULL;
     d->memdom_id = -1;
-    
+
     if (copy_str(label, &d->label))
         goto fail;
 
@@ -163,6 +163,7 @@ int new_pyr_func_sandbox(pyr_func_sandbox_t **sbp, char *func_name) {
     s->func_name = NULL;
     s->read_only = NULL;
     s->read_write = NULL;
+    s->in_sandbox = false;
     s->next = NULL;
 
     if (copy_str(func_name, &s->func_name))
@@ -177,8 +178,8 @@ int new_pyr_func_sandbox(pyr_func_sandbox_t **sbp, char *func_name) {
     return err;
 }
 
-static pyr_func_sandbox_t *find_sandbox(char *func_name,
-                                        pyr_func_sandbox_t *sb_list) {
+pyr_func_sandbox_t *find_sandbox(char *func_name,
+                                 pyr_func_sandbox_t *sb_list) {
     pyr_func_sandbox_t *cur_sb = sb_list;
 
     while(cur_sb) {
@@ -191,7 +192,7 @@ static pyr_func_sandbox_t *find_sandbox(char *func_name,
 }
 
 pyr_data_obj_domain_t *find_domain(char *domain_label,
-				   struct dom_list *dom_list) {
+                                   struct dom_list *dom_list) {
     struct dom_list *cur_dom = dom_list;
     pyr_data_obj_domain_t *dom = NULL;
 
@@ -208,7 +209,7 @@ pyr_data_obj_domain_t *find_domain(char *domain_label,
 }
 
 pyr_data_obj_t *find_data_obj(char *obj_name,
-			      struct obj_list *obj_list) {
+                              struct obj_list *obj_list) {
     struct obj_list *cur_obj = obj_list;
     pyr_data_obj_t *obj = NULL;
 
@@ -237,19 +238,16 @@ static void insert_new_domain(pyr_data_obj_domain_t *dom,
 }
 
 static void insert_new_data_obj(pyr_data_obj_t *obj,
-				struct pyr_security_context *ctx) {
+                                struct pyr_security_context *ctx) {
     struct obj_list *item = NULL;
     item = malloc(sizeof(struct obj_list));
     if (!item)
         return;
- 
+
     item->obj = obj;
     item->next = ctx->data_objs_list;
     ctx->data_objs_list = item;
 }
-
-void *pyr_data_obj_alloc(char *name, size_t size);
-void pyr_data_obj_free(char *name, void *addr);
 
 // Deserialize a lib policy string received from userspace
 // profile is NOT NULL

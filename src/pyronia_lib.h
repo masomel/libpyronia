@@ -19,17 +19,21 @@ extern "C" {
 #endif
 
     int pyr_init(const char *main_mod_path,
-		 const char *lib_policy_file,
+                 const char *lib_policy_file,
                  pyr_cg_node_t *(*collect_callstack_cb)(void),
-		 void (*interpreter_lock_acquire_cb)(void),
-		 void (*interpreter_lock_release_cb)(void));
+                 void (*interpreter_lock_acquire_cb)(void),
+                 void (*interpreter_lock_release_cb)(void));
     void *pyr_alloc_critical_runtime_state(size_t size);
     int pyr_is_critical_state(void *op);
     void pyr_grant_critical_state_write(void *op);
     void pyr_revoke_critical_state_write(void *op);
     int pyr_free_critical_state(void *op);
+    void *pyr_data_object_alloc(char *obj_name, size_t size);
+    void pyr_data_obj_free(char *obj_name, void *addr);
+    void pyr_grant_sandbox_access(char *sandbox_name);
+    void pyr_revoke_sandbox_access(char *sandbox_name);
     int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
-			void*(fn)(void*), void* args);
+                        void*(fn)(void*), void* args);
     int pyr_load_native_lib_isolated(const char *lib);
     int pyr_run_native_func_isolated(const char *lib, void *(*func)(void));
     int pyr_is_interpreter_build(void);

@@ -58,7 +58,6 @@ extern "C" {
                                    pyr_cg_node_t *(*collect_callstack_cb)(void),
                                    void (*interpreter_lock_acquire_cb)(void),
                                    void (*interpreter_lock_release_cb)(void));
-    pyr_data_obj_domain_t *pyr_find_obj_domain(char *domain_label);
     void pyr_security_context_free(struct pyr_security_context **ctxp);
     int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
                                  struct pyr_security_context **ctx);
