@@ -182,7 +182,7 @@ static void new_interp_memdom() {
  */
 void *pyr_alloc_critical_runtime_state(size_t size) {
     void *new_block = NULL;
-    int i = 0;
+    int i = 1;
     pyr_interp_dom_alloc_t *dalloc = NULL;
     if (is_build)
       return malloc(size);
@@ -224,8 +224,8 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
         else {
           if (dalloc->has_space)
             dalloc->has_space = false;
-          if (num_interp_memdoms_in_use == dalloc->memdom_id) {
-            rlog("[%s] Not enough space in any active memdoms. Current number of active memdoms: %d\n", __func__, num_interp_memdoms_in_use);
+          if (num_interp_memdoms_in_use == i) {
+            rlog("[%s] Not enough space in any active memdoms. Current number of active memdoms: %d, last memdom %d\n", __func__, num_interp_memdoms_in_use, dalloc->memdom_id);
             //num_interp_memdoms_in_use++;
             new_interp_memdom();
           }
@@ -237,6 +237,9 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
           break;
         }
         dalloc = dalloc->next;
+	// this is to keep track of how many domains we've already checked,
+	// and compare to the max number of interpdoms
+	i++;
     }
     pthread_mutex_unlock(&security_ctx_mutex);
     return new_block;
