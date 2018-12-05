@@ -50,6 +50,8 @@ extern "C" {
 
     void *pyr_data_obj_alloc(char *name, size_t size);
     void pyr_data_obj_free(char *name, void *addr);
+    pyr_data_obj_t *find_data_obj(char *name, obj_list_t *obj_list);
+    pyr_data_obj_domain_t *find_domain(char *domain_label, dom_list_t *dom_list);
 
 #ifdef __cplusplus
 }

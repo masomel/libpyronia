@@ -190,8 +190,8 @@ static pyr_func_sandbox_t *find_sandbox(char *func_name,
     return cur_sb;
 }
 
-static pyr_data_obj_domain_t *find_domain(char *domain_label,
-                                          struct dom_list *dom_list) {
+pyr_data_obj_domain_t *find_domain(char *domain_label,
+				   struct dom_list *dom_list) {
     struct dom_list *cur_dom = dom_list;
     pyr_data_obj_domain_t *dom = NULL;
 
@@ -207,8 +207,8 @@ static pyr_data_obj_domain_t *find_domain(char *domain_label,
     return dom;
 }
 
-static pyr_data_obj_t *find_data_obj(char *obj_name,
-                                     struct obj_list *obj_list) {
+pyr_data_obj_t *find_data_obj(char *obj_name,
+			      struct obj_list *obj_list) {
     struct obj_list *cur_obj = obj_list;
     pyr_data_obj_t *obj = NULL;
 
