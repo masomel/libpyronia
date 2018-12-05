@@ -134,6 +134,8 @@ int pyr_init(const char *main_mod_path,
     return err;
 }
 
+/**** INTERPRETER DOMAIN MEMORY MANAGEMENT ****/
+
 static void new_interp_memdom() {
   int interp_memdom = -1;
   pyr_interp_dom_alloc_t *new_dom = NULL;
@@ -237,9 +239,9 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
           break;
         }
         dalloc = dalloc->next;
-	// this is to keep track of how many domains we've already checked,
-	// and compare to the max number of interpdoms
-	i++;
+        // this is to keep track of how many domains we've already checked,
+        // and compare to the max number of interpdoms
+        i++;
     }
     pthread_mutex_unlock(&security_ctx_mutex);
     return new_block;
@@ -417,6 +419,179 @@ void pyr_revoke_critical_state_write(void *op) {
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
 }
+
+/**** DATA OBJECT DOMAIN MEMORY MANAGEMENT ****/
+
+/** Wrapper around memdom_alloc for protected in-memory data objects.
+ */
+void *pyr_data_object_alloc(char *obj_name, size_t size) {
+    void *new_block = NULL;
+    pyr_data_obj_t *obj = NULL;
+    pyr_data_obj_domain_t *domain = NULL;
+
+    if (is_build)
+      return malloc(size);
+
+    if (!runtime)
+        return NULL;
+
+    /*if(size > MEMDOM_HEAP_SIZE) {
+      printf("[%s] Requested size is too large for data object dom.\n", __func__);
+      return malloc(size);
+      }*/
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    obj = find_data_obj(obj_name, runtime->data_objs_list);
+    if (!obj)
+        goto out;
+
+    domain = find_domain(obj->domain_label, runtime->obj_domains_list);
+    if (!domain)
+        goto out;
+
+    new_block = memdom_alloc(domain->memdom_id, size);
+    if (!new_block)
+        printf("[%s] Could not allocate memory in domain %s for object %s\n",
+               __func__, obj->name, domain->label);
+    obj->addr = new_block;
+
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+    return new_block;
+}
+
+void pyr_data_obj_free(char *obj_name, void *addr) {
+    pyr_data_obj_t *obj = NULL;
+
+    if (is_build)
+      free(addr);
+
+    if (!runtime)
+        return;
+
+    /*if(size > MEMDOM_HEAP_SIZE) {
+      printf("[%s] Requested size is too large for data object dom.\n", __func__);
+      return malloc(size);
+      }*/
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    obj = find_data_obj(obj_name, runtime->data_objs_list);
+    if (!obj)
+        goto out;
+
+    if (addr != obj->addr) {
+        printf("[%s] Expected address %p, got %p, for object %s\n", __func__,
+               obj->addr, addr, obj->name);
+        goto out;
+    }
+
+    memdom_free(obj->addr);
+
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+}
+
+/** Grants the main thread write access to the data object domains
+ * for the given function sandbox.
+ */
+void pyr_grant_sandbox_access(char *sandbox_name) {
+    pyr_func_sandbox_t *sb = NULL;
+
+    if (is_build)
+      return;
+
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+
+    // let's skip adding write privs if our runtime
+    // doesn't have a domain or our domain is invalid
+    if (!runtime) {
+        return;
+    }
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
+    if (!sb)
+        goto out;
+
+    if (sb->in_sandbox)
+        goto out;
+
+    dom_list_t *ro_dom = sb->read_only;
+    while (ro_dom) {
+        pyr_data_obj_domain_t *dom = ro_dom->domain;
+        memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ);
+        printf("[%s] Add read privilege to domain %s for sandbox %s\n",
+               __func__, dom->label, sandbox_name);
+        ro_dom = ro_dom->next;
+    }
+
+    dom_list_t *rw_dom = sb->read_write;
+    while (rw_dom) {
+        pyr_data_obj_domain_t *dom = rw_dom->domain;
+        memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+        printf("[%s] Add read/write privilege to domain %s for sandbox %s\n",
+               __func__, dom->label, sandbox_name);
+        rw_dom = rw_dom->next;
+    }
+
+    sb->in_sandbox = true;
+
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+}
+
+/** Revokes the main thread write access to the data object domains
+ * for the given function sandbox.
+ */
+void pyr_revoke_sandbox_access(char *sandbox_name) {
+    pyr_func_sandbox_t *sb = NULL;
+
+    if (is_build)
+      return;
+
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+
+    // let's skip adding write privs if our runtime
+    // doesn't have a domain or our domain is invalid
+    if (!runtime) {
+        return;
+    }
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
+    if (!sb)
+        goto out;
+
+    if (!sb->in_sandbox)
+        goto out;
+
+    dom_list_t *ro_dom = sb->read_only;
+    while (ro_dom) {
+        pyr_data_obj_domain_t *dom = ro_dom->domain;
+        memdom_priv_del(dom->memdom_id, MAIN_THREAD, MEMDOM_READ);
+        printf("[%s] Revoke read privilege to domain %s for sandbox %s\n",
+               __func__, dom->label, sandbox_name);
+        ro_dom = ro_dom->next;
+    }
+
+    dom_list_t *rw_dom = sb->read_write;
+    while (rw_dom) {
+        pyr_data_obj_domain_t *dom = rw_dom->domain;
+        memdom_priv_del(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+        printf("[%s] Revoke read/write privilege to domain %s for sandbox %s\n",
+               __func__, dom->label, sandbox_name);
+        rw_dom = rw_dom->next;
+    }
+
+    sb->in_sandbox = false;
+
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+}
+
+/**** MISC PYRONIA API ****/
 
 /** Starts an SMV thread that has access to the MAIN_THREAD memdom.
  * I.e. this is a wrapper for smvthread_create that is supposed to be used

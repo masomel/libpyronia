@@ -6,6 +6,8 @@
 #ifndef __PYR_DATA_OBJ_H
 #define __PYR_DATA_OBJ_H
 
+#include <stdbool.h>
+
 struct data_obj_domain {
     int memdom_id;
     char *label;
@@ -39,6 +41,7 @@ struct func_sandbox {
     char *func_name;
     dom_list_t *read_only;
     dom_list_t *read_write;
+    bool in_sandbox;
     struct func_sandbox *next;
 };
 
@@ -52,6 +55,8 @@ extern "C" {
     void pyr_data_obj_free(char *name, void *addr);
     pyr_data_obj_t *find_data_obj(char *name, obj_list_t *obj_list);
     pyr_data_obj_domain_t *find_domain(char *domain_label, dom_list_t *dom_list);
+    pyr_func_sandbox_t *find_sandbox(char *func_name,
+                                     pyr_func_sandbox_t *sb_list);
 
 #ifdef __cplusplus
 }
