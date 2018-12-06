@@ -449,7 +449,9 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
     if (!domain)
         goto out;
 
+    memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
     new_block = memdom_alloc(domain->memdom_id, size);
+    memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
     if (!new_block)
         printf("[%s] Could not allocate memory in domain %s for object %s\n",
                __func__, obj->name, domain->label);
@@ -462,6 +464,7 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
 
 void pyr_data_obj_free(char *obj_name, void *addr) {
     pyr_data_obj_t *obj = NULL;
+    pyr_data_obj_domain_t *domain = NULL;
 
     if (is_build)
       free(addr);
@@ -485,7 +488,13 @@ void pyr_data_obj_free(char *obj_name, void *addr) {
         goto out;
     }
 
+    domain = find_domain(obj->domain_label, runtime->obj_domains_list);
+    if (!domain)
+        goto out;
+
+    memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
     memdom_free(obj->addr);
+    memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
 
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -509,13 +518,17 @@ void pyr_grant_sandbox_access(char *sandbox_name) {
         return;
     }
 
+    printf("[%s] Sandbox? %s\n", __func__, sandbox_name);
+
     pthread_mutex_lock(&security_ctx_mutex);
     sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
     if (!sb)
         goto out;
 
-    if (sb->in_sandbox)
+    if (sb->in_sandbox) {
+        printf("[%s] already in sandbox\n", __func__);
         goto out;
+    }
 
     dom_list_t *ro_dom = sb->read_only;
     while (ro_dom) {
@@ -558,6 +571,8 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
     if (!runtime) {
         return;
     }
+
+    printf("[%s] Sandbox? %s\n", __func__, sandbox_name);
 
     pthread_mutex_lock(&security_ctx_mutex);
     sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
