@@ -47,7 +47,7 @@ void free_dom_list(struct dom_list **dlp) {
     if (!dl)
         return;
 
-    if (!dl->next)
+    if (dl->next)
         free_dom_list(&dl->next);
 
     if (dl->domain)
@@ -62,7 +62,7 @@ void free_obj_list(struct obj_list **olp) {
     if (!ol)
         return;
 
-    if (!ol->next)
+    if (ol->next)
         free_obj_list(&ol->next);
 
     if (ol->obj)
@@ -228,13 +228,15 @@ pyr_data_obj_t *find_data_obj(char *obj_name,
 static void insert_new_domain(pyr_data_obj_domain_t *dom,
                               struct dom_list **list) {
     struct dom_list *item = NULL;
+    struct dom_list *l = *list;
     item = malloc(sizeof(struct dom_list));
     if (!item)
         return;
 
     item->domain = dom;
-    item->next = *list;
-    *list = item;
+    item->next = l;
+    l = item;
+    *list = l;
 }
 
 static void insert_new_data_obj(pyr_data_obj_t *obj,
@@ -309,6 +311,7 @@ int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
 
         func_sb = find_sandbox(func_name, (*ctx)->func_sandboxes);
         if (!func_sb) {
+	    rlog("[%s] New function sandbox %s\n", __func__, func_name);
             new_pyr_func_sandbox(&func_sb, func_name);
             func_sb->next = (*ctx)->func_sandboxes;
             (*ctx)->func_sandboxes = func_sb;

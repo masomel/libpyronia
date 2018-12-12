@@ -167,7 +167,7 @@ int pyr_parse_lib_policy(const char *policy_fname, char **parsed,
         // deal with it later
         if (next_rule[0] == '-' || next_rule[0] == '+') {
             obj_rules[obj_rule_count] = next_rule;
-	    printf("[%s] Found new object rule: %s\n", __func__,
+	    rlog("[%s] Found new object rule: %s\n", __func__,
 		   obj_rules[obj_rule_count]);
             obj_rule_count++;
         }
