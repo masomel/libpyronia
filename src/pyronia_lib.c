@@ -518,7 +518,8 @@ void pyr_grant_sandbox_access(char *sandbox_name) {
         return;
     }
 
-    printf("[%s] Sandbox? %s\n", __func__, sandbox_name);
+    /*    if (!strncmp(sandbox_name, "tweepy", 6))
+	  printf("[%s] Function FQN %s\n", __func__, sandbox_name);*/
 
     pthread_mutex_lock(&security_ctx_mutex);
     sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
@@ -571,8 +572,6 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
     if (!runtime) {
         return;
     }
-
-    printf("[%s] Sandbox? %s\n", __func__, sandbox_name);
 
     pthread_mutex_lock(&security_ctx_mutex);
     sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
