@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
-#include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
@@ -445,6 +444,12 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
     if (!obj)
         goto out;
 
+    // if this object is already allocated, just return its address
+    if (obj->addr) {
+        new_block = obj->addr;
+        goto out;
+    }
+
     domain = find_domain(obj->domain_label, runtime->obj_domains_list);
     if (!domain)
         goto out;
@@ -519,7 +524,7 @@ void pyr_grant_sandbox_access(char *sandbox_name) {
     }
 
     /*    if (!strncmp(sandbox_name, "tweepy", 6))
-	  printf("[%s] Function FQN %s\n", __func__, sandbox_name);*/
+          printf("[%s] Function FQN %s\n", __func__, sandbox_name);*/
 
     pthread_mutex_lock(&security_ctx_mutex);
     sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
@@ -603,6 +608,68 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
 
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
+}
+
+bool pyr_in_sandbox(char *sandbox_name) {
+    pyr_func_sandbox_t *sb = NULL;
+    bool in_sb = false;
+
+    if (is_build)
+      return false;
+
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+
+    // let's skip adding write privs if our runtime
+    // doesn't have a domain or our domain is invalid
+    if (!runtime) {
+        return false;
+    }
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
+    if (!sb)
+        goto out;
+
+    in_sb = sb->in_sandbox;
+
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+    return in_sb;
+}
+
+char *pyr_get_sandbox_rw_obj(char *sandbox_name) {
+    pyr_func_sandbox_t *sb = NULL;
+    char *name = NULL;
+
+    if (is_build)
+      return false;
+
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+
+    // let's skip adding write privs if our runtime
+    // doesn't have a domain or our domain is invalid
+    if (!runtime) {
+        return false;
+    }
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
+    if (!sb)
+        goto out;
+
+    dom_list_t *rw_dom = sb->read_write;
+    if (rw_dom) {
+        pyr_data_obj_t *obj = find_data_obj_in_dom(rw_dom->domain->label,
+                                                   runtime->data_objs_list);
+        if (obj)
+            name = obj->name;
+    }
+
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+    return name;
 }
 
 /**** MISC PYRONIA API ****/
