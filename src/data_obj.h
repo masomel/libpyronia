@@ -11,6 +11,7 @@
 struct data_obj_domain {
     int memdom_id;
     char *label;
+    bool writable;
 };
 
 typedef struct data_obj_domain pyr_data_obj_domain_t;

@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
@@ -454,9 +455,13 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
     if (!domain)
         goto out;
 
-    memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+    // object allocation only occurs within the scope of the
+    // privileged sandbox function
+    if (!domain->writable)
+      memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
     new_block = memdom_alloc(domain->memdom_id, size);
-    memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+    if (!domain->writable)
+      memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
     if (!new_block)
         printf("[%s] Could not allocate memory in domain %s for object %s\n",
                __func__, obj->name, domain->label);
@@ -548,9 +553,11 @@ void pyr_grant_sandbox_access(char *sandbox_name) {
     dom_list_t *rw_dom = sb->read_write;
     while (rw_dom) {
         pyr_data_obj_domain_t *dom = rw_dom->domain;
-        memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+	if (!dom->writable)
+	  memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
         printf("[%s] Add read/write privilege to domain %s for sandbox %s\n",
                __func__, dom->label, sandbox_name);
+	dom->writable = true;
         rw_dom = rw_dom->next;
     }
 
@@ -598,9 +605,11 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
     dom_list_t *rw_dom = sb->read_write;
     while (rw_dom) {
         pyr_data_obj_domain_t *dom = rw_dom->domain;
-        memdom_priv_del(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+	if (dom->writable)
+	  memdom_priv_del(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
         printf("[%s] Revoke read/write privilege to domain %s for sandbox %s\n",
                __func__, dom->label, sandbox_name);
+	dom->writable = false;
         rw_dom = rw_dom->next;
     }
 
@@ -610,7 +619,7 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
     pthread_mutex_unlock(&security_ctx_mutex);
 }
 
-bool pyr_in_sandbox(char *sandbox_name) {
+int pyr_in_sandbox(char *sandbox_name) {
     pyr_func_sandbox_t *sb = NULL;
     bool in_sb = false;
 
@@ -663,8 +672,12 @@ char *pyr_get_sandbox_rw_obj(char *sandbox_name) {
     if (rw_dom) {
         pyr_data_obj_t *obj = find_data_obj_in_dom(rw_dom->domain->label,
                                                    runtime->data_objs_list);
-        if (obj)
+        if (obj) {
             name = obj->name;
+	    printf("[%s] Found RW object %s in domain %s for sandbox %s\n",
+		   __func__, name, rw_dom->domain->label,
+		   sandbox_name);
+	}
     }
 
  out:
