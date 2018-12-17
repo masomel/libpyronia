@@ -17,6 +17,8 @@ void free_pyr_data_obj(pyr_data_obj_t **objp) {
     if (!o)
         return;
 
+    if (o->addr)
+        memdom_free(o->addr);
     if (o->name)
         free(o->name);
     if (o->domain_label)
@@ -85,11 +87,10 @@ void free_pyr_func_sandbox(pyr_func_sandbox_t **sbp) {
     /*printf("[%s] freeing read-only\n", __func__);
     if (s->read_only)
         free_dom_list(&s->read_only);
-
+    */
     printf("[%s] freeing read-write\n", __func__);
     if (s->read_write)
-        free_dom_list(&s->read_write);
-    */
+        free_pyr_data_obj(&s->read_write);
     free(s);
     *sbp = NULL;
 }
@@ -107,6 +108,7 @@ int new_pyr_data_obj(pyr_data_obj_t **objp,
     o->name = NULL;
     o->domain_label = NULL;
     o->addr = NULL;
+    o->size = 0;
 
     if (copy_str(name, &o->name))
         goto fail;
@@ -218,7 +220,7 @@ pyr_data_obj_t *find_data_obj(char *obj_name,
 
     if (!obj_name)
       return NULL;
-    
+
     while(cur_obj) {
         if (!strncmp(cur_obj->obj->name, obj_name,
                      strlen(cur_obj->obj->name))) {
@@ -238,9 +240,9 @@ pyr_data_obj_t *find_data_obj_in_dom(char *domain_label,
 
     while(cur_obj) {
       if (!strncmp(cur_obj->obj->domain_label, domain_label,
-		   strlen(cur_obj->obj->domain_label))) {
-	obj = cur_obj->obj;
-	goto out;
+                   strlen(cur_obj->obj->domain_label))) {
+        obj = cur_obj->obj;
+        goto out;
       }
       cur_obj = cur_obj->next;
     }
@@ -263,15 +265,17 @@ static void insert_new_domain(pyr_data_obj_domain_t *dom,
 }
 
 static void insert_new_data_obj(pyr_data_obj_t *obj,
-                                struct pyr_security_context *ctx) {
+                                struct obj_list **list) {
     struct obj_list *item = NULL;
+    struct obj_list *l = *list;
     item = malloc(sizeof(struct obj_list));
     if (!item)
         return;
 
     item->obj = obj;
-    item->next = ctx->data_objs_list;
-    ctx->data_objs_list = item;
+    item->next = l;
+    l = item;
+    *list = l;
 }
 
 // Deserialize a lib policy string received from userspace
@@ -317,7 +321,7 @@ int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
         func_name = strsep(&next_rule, LIB_RULE_DELIM);
         if (!func_name) {
             goto malformed;
-	}
+        }
 
         // let's create all new data structures and insert them
         // into our security context if they don't exist yet
@@ -330,24 +334,24 @@ int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
         obj = find_data_obj(obj_name, (*ctx)->data_objs_list);
         if (!obj) {
             err = new_pyr_data_obj(&obj, obj_name, dom_label);
-            insert_new_data_obj(obj, *ctx);
+            insert_new_data_obj(obj, &(*ctx)->data_objs_list);
         }
 
         func_sb = find_sandbox(func_name, (*ctx)->func_sandboxes);
         if (!func_sb) {
-	    rlog("[%s] New function sandbox %s\n", __func__, func_name);
+            rlog("[%s] New function sandbox %s\n", __func__, func_name);
             new_pyr_func_sandbox(&func_sb, func_name);
             func_sb->next = (*ctx)->func_sandboxes;
             (*ctx)->func_sandboxes = func_sb;
         }
 
         // now we can actually determine the access rule
-        if (is_rw && !find_domain(dom_label, func_sb->read_write))
-            insert_new_domain(dom, &func_sb->read_write);
-        else if (!is_rw && !find_domain(dom_label, func_sb->read_only))
-            insert_new_domain(dom, &func_sb->read_only);
-	
-	is_rw = 0; // need to reset this flag at each iteration
+        if (is_rw && !func_sb->read_write)
+            func_sb->read_write = obj;
+        else if (!is_rw && !find_data_obj(obj_name, func_sb->read_only))
+            insert_new_data_obj(obj, &func_sb->read_only);
+
+        is_rw = 0; // need to reset this flag at each iteration
     }
     goto out;
 

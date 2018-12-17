@@ -19,6 +19,7 @@ typedef struct data_obj_domain pyr_data_obj_domain_t;
 struct pyr_data_obj {
     char *name;
     void *addr;
+    size_t size;
     char *domain_label;
 };
 
@@ -40,8 +41,8 @@ typedef struct dom_list dom_list_t;
 
 struct func_sandbox {
     char *func_name;
-    dom_list_t *read_only;
-    dom_list_t *read_write;
+    obj_list_t *read_only;
+    pyr_data_obj_t *read_write; // FIXME: support more than one output/RW object
     bool in_sandbox;
     struct func_sandbox *next;
 };

@@ -466,6 +466,7 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
         printf("[%s] Could not allocate memory in domain %s for object %s\n",
                __func__, obj->name, domain->label);
     obj->addr = new_block;
+    obj->size = size;
 
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -504,10 +505,37 @@ void pyr_data_obj_free(char *obj_name, void *addr) {
 
     memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
     memdom_free(obj->addr);
+    obj->addr = NULL;
+    obj->size = 0;
     memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
 
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
+}
+
+// This is likely going to be used by the interpreter's garbage collector
+int pyr_is_isolated_data_obj(void *addr) {
+    obj_list_t *obj_item = runtime->data_objs_list;
+    int is_data_obj = 0;
+
+    if (is_build)
+        return 0;
+
+    if (!runtime)
+        return 0;
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    while(obj_item) {
+        if (obj_item->obj && obj_item->obj->addr == addr) {
+            // need an exact address match
+            is_data_obj = 1;
+            goto out;
+        }
+        obj_item = obj_item->next;
+    }
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+    return is_data_obj;
 }
 
 /** Grants the main thread write access to the data object domains
@@ -541,24 +569,27 @@ void pyr_grant_sandbox_access(char *sandbox_name) {
         goto out;
     }
 
-    dom_list_t *ro_dom = sb->read_only;
-    while (ro_dom) {
-        pyr_data_obj_domain_t *dom = ro_dom->domain;
-        memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ);
-        printf("[%s] Add read privilege to domain %s for sandbox %s\n",
-               __func__, dom->label, sandbox_name);
+    obj_list_t *ro_objs = sb->read_only;
+    while (ro_objs) {
+        pyr_data_obj_t *ro_obj = ro_objs->obj;
+        pyr_data_obj_domain_t *dom = find_domain(ro_obj->domain_label, runtime->obj_domains_list);
+        if (dom) {
+            memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ);
+            printf("[%s] Add read privilege to domain %s for sandbox %s\n",
+                   __func__, dom->label, sandbox_name);
+        }
         ro_dom = ro_dom->next;
     }
 
-    dom_list_t *rw_dom = sb->read_write;
-    while (rw_dom) {
-        pyr_data_obj_domain_t *dom = rw_dom->domain;
-	if (!dom->writable)
-	  memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-        printf("[%s] Add read/write privilege to domain %s for sandbox %s\n",
-               __func__, dom->label, sandbox_name);
-	dom->writable = true;
-        rw_dom = rw_dom->next;
+    pyr_data_obj_t *rw_obj = sb->read_write;
+    if (rw_obj) {
+        pyr_data_obj_domain_t *dom = find_domain(rw_obj->domain_label, runtime->obj_domains_list);
+        if (dom && !dom->writable) {
+            memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+            printf("[%s] Add read/write privilege to domain %s for sandbox %s\n",
+                   __func__, dom->label, sandbox_name);
+            dom->writable = true;
+        }
     }
 
     sb->in_sandbox = true;
@@ -593,24 +624,28 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
     if (!sb->in_sandbox)
         goto out;
 
-    dom_list_t *ro_dom = sb->read_only;
-    while (ro_dom) {
-        pyr_data_obj_domain_t *dom = ro_dom->domain;
-        memdom_priv_del(dom->memdom_id, MAIN_THREAD, MEMDOM_READ);
-        printf("[%s] Revoke read privilege to domain %s for sandbox %s\n",
-               __func__, dom->label, sandbox_name);
+
+    obj_list_t *ro_objs = sb->read_only;
+    while (ro_objs) {
+        pyr_data_obj_t *ro_obj = ro_objs->obj;
+        pyr_data_obj_domain_t *dom = find_domain(ro_obj->domain_label, runtime->obj_domains_list);
+        if (dom) {
+            memdom_priv_del(dom->memdom_id, MAIN_THREAD, MEMDOM_READ);
+            printf("[%s] Revoke read privilege to domain %s for sandbox %s\n",
+                   __func__, dom->label, sandbox_name);
+        }
         ro_dom = ro_dom->next;
     }
 
-    dom_list_t *rw_dom = sb->read_write;
-    while (rw_dom) {
-        pyr_data_obj_domain_t *dom = rw_dom->domain;
-	if (dom->writable)
-	  memdom_priv_del(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-        printf("[%s] Revoke read/write privilege to domain %s for sandbox %s\n",
-               __func__, dom->label, sandbox_name);
-	dom->writable = false;
-        rw_dom = rw_dom->next;
+    pyr_data_obj_t *rw_obj = sb->read_write;
+    if (rw_obj) {
+        pyr_data_obj_domain_t *dom = find_domain(rw_obj->domain_label, runtime->obj_domains_list);
+        if (dom && dom->writable) {
+            memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+            printf("[%s] Revoke read/write privilege to domain %s for sandbox %s\n",
+                   __func__, dom->label, sandbox_name);
+            dom->writable = false;
+        }
     }
 
     sb->in_sandbox = false;
@@ -647,12 +682,12 @@ int pyr_in_sandbox(char *sandbox_name) {
     return in_sb;
 }
 
-char *pyr_get_sandbox_rw_obj(char *sandbox_name) {
+pyr_data_obj_t *pyr_get_sandbox_rw_obj(char *sandbox_name) {
     pyr_func_sandbox_t *sb = NULL;
-    char *name = NULL;
+    pyr_data_obj_t *rw_obj = NULL;
 
     if (is_build)
-      return false;
+      return NULL;
 
     // suspend if the stack tracer thread is running
     pyr_is_inspecting();
@@ -660,7 +695,7 @@ char *pyr_get_sandbox_rw_obj(char *sandbox_name) {
     // let's skip adding write privs if our runtime
     // doesn't have a domain or our domain is invalid
     if (!runtime) {
-        return false;
+        return NULL;
     }
 
     pthread_mutex_lock(&security_ctx_mutex);
@@ -668,21 +703,16 @@ char *pyr_get_sandbox_rw_obj(char *sandbox_name) {
     if (!sb)
         goto out;
 
-    dom_list_t *rw_dom = sb->read_write;
-    if (rw_dom) {
-        pyr_data_obj_t *obj = find_data_obj_in_dom(rw_dom->domain->label,
-                                                   runtime->data_objs_list);
-        if (obj) {
-            name = obj->name;
-	    printf("[%s] Found RW object %s in domain %s for sandbox %s\n",
-		   __func__, name, rw_dom->domain->label,
-		   sandbox_name);
-	}
+    rw_obj = sb->read_write;
+    if (rw_obj) {
+        printf("[%s] Found RW object %s in domain %s for sandbox %s\n",
+               __func__, rw_obj->name, rw_obj->domain->label,
+               sandbox_name);
     }
 
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
-    return name;
+    return rw_obj;
 }
 
 /**** MISC PYRONIA API ****/
