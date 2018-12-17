@@ -134,6 +134,7 @@ int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
 
     d->label = NULL;
     d->memdom_id = -1;
+    d->writable = false;
 
     if (copy_str(label, &d->label))
         goto fail;
@@ -142,6 +143,8 @@ int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
     if (d->memdom_id <= 0) {
         goto fail;
     }
+    // don't forget to add the main thread to this memdom
+    smv_join_domain(d->memdom_id, MAIN_THREAD);
 
     *domp = d;
     return 0;
@@ -213,6 +216,9 @@ pyr_data_obj_t *find_data_obj(char *obj_name,
     struct obj_list *cur_obj = obj_list;
     pyr_data_obj_t *obj = NULL;
 
+    if (!obj_name)
+      return NULL;
+    
     while(cur_obj) {
         if (!strncmp(cur_obj->obj->name, obj_name,
                      strlen(cur_obj->obj->name))) {
@@ -220,6 +226,23 @@ pyr_data_obj_t *find_data_obj(char *obj_name,
             goto out;
         }
         cur_obj = cur_obj->next;
+    }
+ out:
+    return obj;
+}
+
+pyr_data_obj_t *find_data_obj_in_dom(char *domain_label,
+                              struct obj_list *obj_list) {
+    struct obj_list *cur_obj = obj_list;
+    pyr_data_obj_t *obj = NULL;
+
+    while(cur_obj) {
+      if (!strncmp(cur_obj->obj->domain_label, domain_label,
+		   strlen(cur_obj->obj->domain_label))) {
+	obj = cur_obj->obj;
+	goto out;
+      }
+      cur_obj = cur_obj->next;
     }
  out:
     return obj;
@@ -280,7 +303,7 @@ int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
         else
             strsep(&next_rule, RO_DATA_OBJ_MARKER);
 
-        rlog("[%s] Parsing %s rule %s\n", __func__,
+        printf("[%s] Parsing %s rule %s\n", __func__,
                (is_rw ? "RW" : "RO"), next_rule);
 
         obj_name = strsep(&next_rule, DOMAIN_DELIM);
@@ -292,8 +315,9 @@ int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
             goto malformed;
         }
         func_name = strsep(&next_rule, LIB_RULE_DELIM);
-        if (!func_name)
+        if (!func_name) {
             goto malformed;
+	}
 
         // let's create all new data structures and insert them
         // into our security context if they don't exist yet
@@ -322,6 +346,8 @@ int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
             insert_new_domain(dom, &func_sb->read_write);
         else if (!is_rw && !find_domain(dom_label, func_sb->read_only))
             insert_new_domain(dom, &func_sb->read_only);
+	
+	is_rw = 0; // need to reset this flag at each iteration
     }
     goto out;
 

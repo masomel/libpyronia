@@ -7,7 +7,6 @@
 #define __PYR_LIB_H
 
 #include <stdlib.h>
-#include <stdbool.h>
 #include <linux/pyronia_mac.h>
 
 //#define PYR_INTERCEPT_PTHREAD_CREATE
@@ -33,7 +32,7 @@ extern "C" {
     void pyr_data_obj_free(char *obj_name, void *addr);
     void pyr_grant_sandbox_access(char *sandbox_name);
     void pyr_revoke_sandbox_access(char *sandbox_name);
-    bool pyr_in_sandbox(char *sandbox_name);
+    int pyr_in_sandbox(char *sandbox_name);
     char *pyr_get_sandbox_rw_obj(char *sandbox_name);
     int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
                         void*(fn)(void*), void* args);
