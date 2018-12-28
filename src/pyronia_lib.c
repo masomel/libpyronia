@@ -29,6 +29,7 @@ static int is_build = 0;
 static pthread_t recv_th;
 static int num_interp_memdoms_in_use = 1;
 static pyr_interp_dom_alloc_t *allocs_tail = NULL;
+static pyr_func_sandbox_t *cur_sandbox = NULL;
 
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
@@ -104,12 +105,14 @@ int pyr_init(const char *main_mod_path,
       goto out;
     }
 
-    err = pyr_parse_data_obj_rules(obj_policy, num_obj_rules,
-                                   &runtime);
-    if (err) {
+    if (obj_policy && num_obj_rules) {
+      err = pyr_parse_data_obj_rules(obj_policy, num_obj_rules,
+				     &runtime);
+      if (err) {
         printf("[%s] Parsing data object policy failure: %d\n",
                __func__, err);
-      goto out;
+	goto out;
+      }
     }
 
     /* Initialize the stack inspection communication channel with
@@ -210,6 +213,7 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
                     // so update the allocation metadata
                     dalloc->start = new_block;
                     dalloc->end = new_block+MEMDOM_HEAP_SIZE;
+		    printf("[%s] Memdom %d at %p\n", __func__, dalloc->memdom_id, dalloc->start);
                 }
                 rlog("[%s] Allocated %lu bytes in memdom %d\n", __func__, size, dalloc->memdom_id);
                 break;
@@ -443,13 +447,7 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
     pthread_mutex_lock(&security_ctx_mutex);
     obj = find_data_obj(obj_name, runtime->data_objs_list);
     if (!obj)
-        goto out;
-
-    // if this object is already allocated, just return its address
-    if (obj->addr) {
-        new_block = obj->addr;
-        goto out;
-    }
+      goto out;
 
     domain = find_domain(obj->domain_label, runtime->obj_domains_list);
     if (!domain)
@@ -465,15 +463,44 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
     if (!new_block)
         printf("[%s] Could not allocate memory in domain %s for object %s\n",
                __func__, obj->name, domain->label);
+    /*
     obj->addr = new_block;
     obj->size = size;
+    */
+
+    if (new_block) {
+      if (!domain->addr) {
+	// this is our first allocation in this memdom
+	// so update the allocation metadata
+	domain->addr = new_block;
+	domain->size = MEMDOM_HEAP_SIZE;;
+      }
+      printf("[%s] Allocating object %s (%lu bytes) at address %p\n", __func__,
+	     obj_name, size, new_block);
+    }
 
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
     return new_block;
 }
 
-void pyr_data_obj_free(char *obj_name, void *addr) {
+static pyr_data_obj_domain_t *get_data_obj_domain(void *addr) {
+  dom_list_t *dom_item = runtime->obj_domains_list;
+  pyr_data_obj_domain_t *domain = NULL;
+  pthread_mutex_lock(&security_ctx_mutex);
+  while(dom_item) {
+    domain = dom_item->domain;
+    if (addr >= domain->addr && addr < domain->addr+domain->size) {
+      goto out;
+    }
+    dom_item = dom_item->next;
+  }
+ out:
+  pthread_mutex_unlock(&security_ctx_mutex);
+  return domain;
+}
+
+void pyr_data_obj_free(void *addr) {
     pyr_data_obj_t *obj = NULL;
     pyr_data_obj_domain_t *domain = NULL;
 
@@ -489,25 +516,13 @@ void pyr_data_obj_free(char *obj_name, void *addr) {
       }*/
 
     pthread_mutex_lock(&security_ctx_mutex);
-    obj = find_data_obj(obj_name, runtime->data_objs_list);
-    if (!obj)
-        goto out;
-
-    if (addr != obj->addr) {
-        printf("[%s] Expected address %p, got %p, for object %s\n", __func__,
-               obj->addr, addr, obj->name);
-        goto out;
-    }
-
-    domain = find_domain(obj->domain_label, runtime->obj_domains_list);
+    domain = get_data_obj_domain(addr);
     if (!domain)
         goto out;
 
     memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-    memdom_free(obj->addr);
-    obj->addr = NULL;
-    obj->size = 0;
-    memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+    memdom_free(addr);
+    memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
 
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -515,7 +530,6 @@ void pyr_data_obj_free(char *obj_name, void *addr) {
 
 // This is likely going to be used by the interpreter's garbage collector
 int pyr_is_isolated_data_obj(void *addr) {
-    obj_list_t *obj_item = runtime->data_objs_list;
     int is_data_obj = 0;
 
     if (is_build)
@@ -523,19 +537,8 @@ int pyr_is_isolated_data_obj(void *addr) {
 
     if (!runtime)
         return 0;
-
-    pthread_mutex_lock(&security_ctx_mutex);
-    while(obj_item) {
-        if (obj_item->obj && obj_item->obj->addr == addr) {
-            // need an exact address match
-            is_data_obj = 1;
-            goto out;
-        }
-        obj_item = obj_item->next;
-    }
- out:
-    pthread_mutex_unlock(&security_ctx_mutex);
-    return is_data_obj;
+    
+    return (get_data_obj_domain(addr) == NULL);
 }
 
 /** Grants the main thread write access to the data object domains
@@ -578,7 +581,7 @@ void pyr_grant_sandbox_access(char *sandbox_name) {
             printf("[%s] Add read privilege to domain %s for sandbox %s\n",
                    __func__, dom->label, sandbox_name);
         }
-        ro_dom = ro_dom->next;
+        ro_objs = ro_objs->next;
     }
 
     pyr_data_obj_t *rw_obj = sb->read_write;
@@ -593,7 +596,7 @@ void pyr_grant_sandbox_access(char *sandbox_name) {
     }
 
     sb->in_sandbox = true;
-
+    cur_sandbox = sb;
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
 }
@@ -634,14 +637,14 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
             printf("[%s] Revoke read privilege to domain %s for sandbox %s\n",
                    __func__, dom->label, sandbox_name);
         }
-        ro_dom = ro_dom->next;
+        ro_objs = ro_objs->next;
     }
 
     pyr_data_obj_t *rw_obj = sb->read_write;
     if (rw_obj) {
         pyr_data_obj_domain_t *dom = find_domain(rw_obj->domain_label, runtime->obj_domains_list);
         if (dom && dom->writable) {
-            memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+            memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
             printf("[%s] Revoke read/write privilege to domain %s for sandbox %s\n",
                    __func__, dom->label, sandbox_name);
             dom->writable = false;
@@ -649,12 +652,12 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
     }
 
     sb->in_sandbox = false;
-
+    cur_sandbox = NULL;
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
 }
 
-int pyr_in_sandbox(char *sandbox_name) {
+int pyr_in_sandbox() {
     pyr_func_sandbox_t *sb = NULL;
     bool in_sb = false;
 
@@ -671,18 +674,16 @@ int pyr_in_sandbox(char *sandbox_name) {
     }
 
     pthread_mutex_lock(&security_ctx_mutex);
-    sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
-    if (!sb)
-        goto out;
+    if (!cur_sandbox)
+      goto out;
 
-    in_sb = sb->in_sandbox;
-
+    in_sb = cur_sandbox->in_sandbox;
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
     return in_sb;
 }
 
-pyr_data_obj_t *pyr_get_sandbox_rw_obj(char *sandbox_name) {
+pyr_data_obj_t *pyr_get_sandbox_rw_obj() {
     pyr_func_sandbox_t *sb = NULL;
     pyr_data_obj_t *rw_obj = NULL;
 
@@ -699,15 +700,14 @@ pyr_data_obj_t *pyr_get_sandbox_rw_obj(char *sandbox_name) {
     }
 
     pthread_mutex_lock(&security_ctx_mutex);
-    sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
-    if (!sb)
-        goto out;
-
-    rw_obj = sb->read_write;
+    if (!cur_sandbox)
+      goto out;
+    
+    rw_obj = cur_sandbox->read_write;
     if (rw_obj) {
-        printf("[%s] Found RW object %s in domain %s for sandbox %s\n",
-               __func__, rw_obj->name, rw_obj->domain->label,
-               sandbox_name);
+        printf("[%s] Found RW object %s in domain %s for current sandbox %s\n",
+               __func__, rw_obj->name, rw_obj->domain_label,
+               cur_sandbox->func_name);
     }
 
  out:
@@ -807,6 +807,7 @@ void pyr_exit() {
     if (runtime->main_path)
       pyr_free_critical_state(runtime->main_path);
     pyr_security_context_free(&runtime);
+    printf("[%s] Done\n", __func__);
 }
 
 /** Wrapper around the runtime callstack collection callback

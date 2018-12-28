@@ -535,7 +535,7 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
     rlog("[%s] memdom_alloc failed: no memory can be allocated in memdom %d\n", __func__, memdom_id);
   }
   else{
-    rlog("[%s] new_alloc: addr %p, allocated %lu bytes\n", __func__, new_alloc->addr, new_alloc->size);
+    rlog("[%s] new_alloc in memdom %d: addr %p, allocated %lu bytes\n", __func__, memdom_id, new_alloc->addr, new_alloc->size);
     memdom[memdom_id]->cur_alloc += new_alloc->size;
     if (memdom[memdom_id]->cur_alloc > memdom[memdom_id]->peak_alloc)
       memdom[memdom_id]->peak_alloc = memdom[memdom_id]->cur_alloc;

@@ -9,7 +9,13 @@
 #include <stdlib.h>
 #include <linux/pyronia_mac.h>
 
-struct pyr_data_obj;
+struct pyr_data_obj {
+    char *name;
+    void *addr;
+    size_t size;
+    char *domain_label;
+};
+
 typedef struct pyr_data_obj pyr_data_obj_t;
 
 //#define PYR_INTERCEPT_PTHREAD_CREATE
@@ -31,13 +37,13 @@ extern "C" {
     void pyr_grant_critical_state_write(void *op);
     void pyr_revoke_critical_state_write(void *op);
     int pyr_free_critical_state(void *op);
+    void *pyr_data_object_alloc(char *name, size_t size);
+    void pyr_data_obj_free(void *addr);
     int pyr_is_isolated_data_obj(void *addr);
-    void *pyr_data_object_alloc(char *obj_name, size_t size);
-    void pyr_data_obj_free(char *obj_name, void *addr);
+    pyr_data_obj_t *pyr_get_sandbox_rw_obj(void);
     void pyr_grant_sandbox_access(char *sandbox_name);
     void pyr_revoke_sandbox_access(char *sandbox_name);
-    int pyr_in_sandbox(char *sandbox_name);
-    pyr_data_obj_t *pyr_get_sandbox_rw_obj(char *sandbox_name);
+    int pyr_in_sandbox(void);
     int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
                         void*(fn)(void*), void* args);
     int pyr_load_native_lib_isolated(const char *lib);

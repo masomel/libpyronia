@@ -42,6 +42,5 @@
 /usr/lib/x86_64-linux-gnu/libxcb*.so.0.0.0 mr,
 /usr/lib/x86_64-linux-gnu/libxshmfence.so.1.0.0 mr,
 /usr/lib/x86_64-linux-gnu/libglapi.so.0.0.0 mr,
-
-
+/home/pyronia/cpython/pyronia_build/Modules/Setup mr,
 
