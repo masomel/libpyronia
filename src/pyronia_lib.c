@@ -743,26 +743,12 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
     return ret;
 }
 
-/** Loads the given native library into its own memory domain.
- */
-int pyr_load_native_lib_isolated(const char *lib) {
-    // FIXME
-    return 0;
-}
-
-/** Runs the given function belonging to the given library in
- * in an isolated compartment (i.e. SMV).
- */
-int pyr_run_native_func_isolated(const char *lib, void *(*func)(void)) {
-    // FIXME
-    return 0;
-}
-
 /** Starts the SI listener and dispatch thread.
  */
 void pyr_callstack_req_listen() {
     pthread_attr_t attr;
     int i = 0;
+    si_memdom = -1;
 
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
@@ -777,12 +763,21 @@ void pyr_callstack_req_listen() {
     // to access the functions
     smv_join_domain(MAIN_THREAD, si_smv_id);
     memdom_priv_add(MAIN_THREAD, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
+
+    si_memdom = memdom_create();
+    if (si_memdom == -1) {
+        printf("[%s] Could not create SI thread memdom\m", __func__);
+    }
+    smv_join_domain(si_memdom, si_smv_id);
+    memdom_priv_add(si_memdom, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
+
+    /*
     pyr_interp_dom_alloc_t *dalloc = runtime->interp_doms;
     while(dalloc) {
       smv_join_domain(dalloc->memdom_id, si_smv_id);
       memdom_priv_add(dalloc->memdom_id, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
       dalloc = dalloc->next;
-    }
+      }*/
 
     smvthread_create_attr(si_smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
 }
@@ -832,21 +827,26 @@ int pyr_new_cg_node(pyr_cg_node_t **cg_root, const char* lib,
                         enum pyr_data_types data_type,
                         pyr_cg_node_t *child) {
 
-    pyr_cg_node_t *n = pyr_alloc_critical_runtime_state(sizeof(pyr_cg_node_t));
+    pyr_cg_node_t *n = memdom_alloc(si_memdom, sizeof(pyr_cg_node_t));
 
     if (n == NULL) {
         goto fail;
     }
 
-    if (set_str(lib, &n->lib))
-      goto fail;
+    n->lib = memdom_alloc(si_memdom, strlen(lib)+1);
+    if (!n->lib) {
+        goto fail;
+    }
+
+    memset(n->lib, 0, strlen(lib)+1);
+    memcpy(n->lib, lib, strlen(lib));
     n->data_type = data_type;
     n->child = child;
 
     *cg_root = n;
     return 0;
  fail:
-    pyr_free_critical_state(n);
+    memdom_free(n);
     return -1;
 }
 
@@ -862,8 +862,8 @@ static void free_node(pyr_cg_node_t **node) {
       free_node(&n->child);
     }
 
-    pyr_free_critical_state(n->lib);
-    pyr_free_critical_state(n);
+    memdom_free(n->lib);
+    memdom_free(n);
     *node = NULL;
 }
 
