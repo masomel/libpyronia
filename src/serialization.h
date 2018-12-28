@@ -17,6 +17,8 @@
 #define FUNC_NAME_DELIM " "
 #define LIB_RULE_DELIM ","
 
+int si_memdom;
+
 #ifdef __cplusplus
 extern "C" {
 #endif

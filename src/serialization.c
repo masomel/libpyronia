@@ -63,7 +63,7 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
 
     // now we need to pre-append the len so the kernel knows how many
     // nodes to expect to de-serialize
-    out = pyr_alloc_critical_runtime_state(strlen(ser)+INT32_STR_SIZE+2);
+    out = memdom_alloc(si_memdom, strlen(ser)+INT32_STR_SIZE+2);
     if (!out)
         goto fail;
     memset(out, 0, strlen(ser)+INT32_STR_SIZE+2);

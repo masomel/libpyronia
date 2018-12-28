@@ -131,7 +131,7 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
     if (callstack)
         pyr_free_callgraph(&callstack);
     if (callstack_str)
-        pyr_free_critical_state(callstack_str);
+        memdom_free(callstack_str);
     return err;
 }
 
