@@ -32,15 +32,16 @@ void free_pyr_data_obj_domain(pyr_data_obj_domain_t **domp) {
     pyr_data_obj_domain_t *d = *domp;
     if (!d)
         return;
-
-    if (d->memdom_id > 0)
-      memdom_kill(d->memdom_id);
-
     if (d->label)
         free(d->label);
+    if (d->addr)
+        memdom_free(d->addr);
+    if (d->memdom_id > 0) {
+      smv_leave_domain(d->memdom_id, MAIN_THREAD);
+      memdom_kill(d->memdom_id);
+    }
 
     free(d);
-    d = NULL;
     *domp = NULL;
 }
 
@@ -88,9 +89,6 @@ void free_pyr_func_sandbox(pyr_func_sandbox_t **sbp) {
     if (s->read_only)
         free_dom_list(&s->read_only);
     */
-    printf("[%s] freeing read-write\n", __func__);
-    if (s->read_write)
-        free_pyr_data_obj(&s->read_write);
     free(s);
     *sbp = NULL;
 }
@@ -136,13 +134,15 @@ int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
 
     d->label = NULL;
     d->memdom_id = -1;
+    d->addr = NULL;
+    d->size = 0;
     d->writable = false;
 
     if (copy_str(label, &d->label))
         goto fail;
 
     d->memdom_id = memdom_create();
-    if (d->memdom_id <= 0) {
+    if (d->memdom_id == -1) {
         goto fail;
     }
     // don't forget to add the main thread to this memdom
@@ -282,7 +282,7 @@ static void insert_new_data_obj(pyr_data_obj_t *obj,
 // profile is NOT NULL
 int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
                              struct pyr_security_context **ctx) {
-    int err = -1;
+    int err = 0;
     char *next_rule, obj_marker, *obj_name, *dom_label, *func_name;
     int i = 0;
     int is_rw = 0;

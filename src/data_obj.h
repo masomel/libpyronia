@@ -11,18 +11,14 @@
 struct data_obj_domain {
     int memdom_id;
     char *label;
+    void *addr;
+    size_t size;
     bool writable;
 };
 
 typedef struct data_obj_domain pyr_data_obj_domain_t;
 
-struct pyr_data_obj {
-    char *name;
-    void *addr;
-    size_t size;
-    char *domain_label;
-};
-
+struct pyr_data_obj;
 typedef struct pyr_data_obj pyr_data_obj_t;
 
 struct obj_list {
@@ -53,8 +49,6 @@ typedef struct func_sandbox pyr_func_sandbox_t;
 extern "C" {
 #endif
 
-    void *pyr_data_obj_alloc(char *name, size_t size);
-    void pyr_data_obj_free(char *name, void *addr);
     pyr_data_obj_t *find_data_obj(char *name, obj_list_t *obj_list);
     pyr_data_obj_t *find_data_obj_in_dom(char *domain_label, obj_list_t *obj_list);
     pyr_data_obj_domain_t *find_domain(char *domain_label, dom_list_t *dom_list);

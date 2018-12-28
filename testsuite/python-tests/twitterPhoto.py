@@ -32,7 +32,9 @@ access_token_secret = 'AvfVJxVyTX3boqgB3AtzHhmAzZCOhKCLRP63zIsNIAcS9'
 
 # OAuth process, using the keys and tokens
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+print(repr(auth))
 auth.set_access_token(access_token, access_token_secret)
+print(repr(auth))
 
 # Creation of the actual interface, using authentication
 api = tweepy.API(auth)
