@@ -58,7 +58,7 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
         cur_node = cur_node->child;
         node_count++;
 
-        printf("[%s] Serialized node: %s, # nodes %d\n", __func__, ser, node_count);
+        rlog("[%s] Serialized node: %s, # nodes %d\n", __func__, ser, node_count);
     }
 
     // now we need to pre-append the len so the kernel knows how many
@@ -69,7 +69,7 @@ int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
     memset(out, 0, strlen(ser)+INT32_STR_SIZE+2);
     ret = sprintf(out, "%d,%s", node_count, ser);
     free(ser);
-
+    rlog("[%s] Serialized call stack: %s\n", __func__, out);
     *cs_str = out;
     return ret;
  fail:

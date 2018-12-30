@@ -169,7 +169,7 @@ static void new_interp_memdom() {
   // we even launch the SI thread
   if (si_smv_id != -1) {
     smv_join_domain(new_dom->memdom_id, si_smv_id);
-    memdom_priv_add(new_dom->memdom_id, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
+    memdom_priv_add(new_dom->memdom_id, si_smv_id, MEMDOM_READ);
   }
 
   // insert at tail
@@ -213,7 +213,7 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
                     // so update the allocation metadata
                     dalloc->start = new_block;
                     dalloc->end = new_block+MEMDOM_HEAP_SIZE;
-		    printf("[%s] Memdom %d at %p\n", __func__, dalloc->memdom_id, dalloc->start);
+		    rlog("[%s] Memdom %d at %p\n", __func__, dalloc->memdom_id, dalloc->start);
                 }
                 rlog("[%s] Allocated %lu bytes in memdom %d\n", __func__, size, dalloc->memdom_id);
                 break;
@@ -453,13 +453,7 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
     if (!domain)
         goto out;
 
-    // object allocation only occurs within the scope of the
-    // privileged sandbox function
-    if (!domain->writable)
-      memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
     new_block = memdom_alloc(domain->memdom_id, size);
-    if (!domain->writable)
-      memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
     if (!new_block)
         printf("[%s] Could not allocate memory in domain %s for object %s\n",
                __func__, obj->name, domain->label);
@@ -473,7 +467,7 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
 	// this is our first allocation in this memdom
 	// so update the allocation metadata
 	domain->addr = new_block;
-	domain->size = MEMDOM_HEAP_SIZE;;
+	domain->size = MEMDOM_HEAP_SIZE;
       }
       printf("[%s] Allocating object %s (%lu bytes) at address %p\n", __func__,
 	     obj_name, size, new_block);
@@ -489,8 +483,10 @@ static pyr_data_obj_domain_t *get_data_obj_domain(void *addr) {
   pyr_data_obj_domain_t *domain = NULL;
   pthread_mutex_lock(&security_ctx_mutex);
   while(dom_item) {
-    domain = dom_item->domain;
-    if (addr >= domain->addr && addr < domain->addr+domain->size) {
+    if (dom_item->domain->addr &&
+	addr >= dom_item->domain->addr &&
+	addr < dom_item->domain->addr+dom_item->domain->size) {
+      domain = dom_item->domain;
       goto out;
     }
     dom_item = dom_item->next;
@@ -509,20 +505,18 @@ void pyr_data_obj_free(void *addr) {
 
     if (!runtime)
         return;
-
-    /*if(size > MEMDOM_HEAP_SIZE) {
-      printf("[%s] Requested size is too large for data object dom.\n", __func__);
-      return malloc(size);
-      }*/
-
+    
     pthread_mutex_lock(&security_ctx_mutex);
     domain = get_data_obj_domain(addr);
     if (!domain)
         goto out;
 
-    memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+    printf("[%s] Obj at %p in domain %s\n", __func__, addr, domain->label);
+    if (!domain->writable)
+      memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
     memdom_free(addr);
-    memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+    if (!domain->writable)
+      memdom_priv_del(domain->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
 
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -538,7 +532,29 @@ int pyr_is_isolated_data_obj(void *addr) {
     if (!runtime)
         return 0;
     
-    return (get_data_obj_domain(addr) == NULL);
+    return (get_data_obj_domain(addr) != NULL);
+}
+
+int pyr_is_sandboxed(char *sandbox_name) {
+  pyr_func_sandbox_t *sb = NULL;
+
+  if (is_build)
+    return 0;
+  
+  // suspend if the stack tracer thread is running
+  pyr_is_inspecting();
+  
+  // let's skip adding write privs if our runtime
+  // doesn't have a domain or our domain is invalid
+  if (!runtime) {
+    return 0;
+  }
+ 
+  pthread_mutex_lock(&security_ctx_mutex);
+  sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
+  pthread_mutex_unlock(&security_ctx_mutex);
+  
+  return (sb != NULL);
 }
 
 /** Grants the main thread write access to the data object domains
@@ -553,12 +569,10 @@ void pyr_grant_sandbox_access(char *sandbox_name) {
     // suspend if the stack tracer thread is running
     pyr_is_inspecting();
 
-    // let's skip adding write privs if our runtime
-    // doesn't have a domain or our domain is invalid
     if (!runtime) {
         return;
     }
-
+    
     /*    if (!strncmp(sandbox_name, "tweepy", 6))
           printf("[%s] Function FQN %s\n", __func__, sandbox_name);*/
 
@@ -627,7 +641,6 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
     if (!sb->in_sandbox)
         goto out;
 
-
     obj_list_t *ro_objs = sb->read_only;
     while (ro_objs) {
         pyr_data_obj_t *ro_obj = ro_objs->obj;
@@ -663,9 +676,6 @@ int pyr_in_sandbox() {
 
     if (is_build)
       return false;
-
-    // suspend if the stack tracer thread is running
-    pyr_is_inspecting();
 
     // let's skip adding write privs if our runtime
     // doesn't have a domain or our domain is invalid
@@ -705,7 +715,7 @@ pyr_data_obj_t *pyr_get_sandbox_rw_obj() {
     
     rw_obj = cur_sandbox->read_write;
     if (rw_obj) {
-        printf("[%s] Found RW object %s in domain %s for current sandbox %s\n",
+        rlog("[%s] Found RW object %s in domain %s for current sandbox %s\n",
                __func__, rw_obj->name, rw_obj->domain_label,
                cur_sandbox->func_name);
     }
@@ -766,18 +776,17 @@ void pyr_callstack_req_listen() {
 
     si_memdom = memdom_create();
     if (si_memdom == -1) {
-        printf("[%s] Could not create SI thread memdom\m", __func__);
+        printf("[%s] Could not create SI thread memdom\n", __func__);
     }
     smv_join_domain(si_memdom, si_smv_id);
     memdom_priv_add(si_memdom, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
 
-    /*
     pyr_interp_dom_alloc_t *dalloc = runtime->interp_doms;
     while(dalloc) {
       smv_join_domain(dalloc->memdom_id, si_smv_id);
-      memdom_priv_add(dalloc->memdom_id, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
+      memdom_priv_add(dalloc->memdom_id, si_smv_id, MEMDOM_READ);
       dalloc = dalloc->next;
-      }*/
+    }
 
     smvthread_create_attr(si_smv_id, &recv_th, &attr, pyr_recv_from_kernel, NULL);
 }
@@ -798,6 +807,7 @@ void pyr_exit() {
     rlog("[%s] Exiting Pyronia runtime\n", __func__);
     pthread_cancel(recv_th);
     pyr_teardown_si_comm();
+    memdom_kill(si_memdom);
     pyr_grant_critical_state_write((void *)runtime->main_path);
     if (runtime->main_path)
       pyr_free_critical_state(runtime->main_path);
@@ -810,9 +820,21 @@ void pyr_exit() {
  */
 pyr_cg_node_t *pyr_collect_runtime_callstack() {
     pyr_cg_node_t *cg = NULL;
+    bool in_sb = false;
+    if (!runtime)
+      return NULL;
+    // if we're inspecting, we don't want sandbox memory mgmt
+    // to apply, so save the sandbox status, and proceed
+    if (cur_sandbox && cur_sandbox->in_sandbox) {
+      in_sb = true;
+      cur_sandbox->in_sandbox = false;
+    }
     runtime->interpreter_lock_acquire_cb();
     cg = runtime->collect_callstack_cb();
     runtime->interpreter_lock_release_cb();
+    // restore the sandbox status
+    if (in_sb)
+      cur_sandbox->in_sandbox = true;
     rlog("[%s] Done collecting callstack\n", __func__);
     return cg;
 }
