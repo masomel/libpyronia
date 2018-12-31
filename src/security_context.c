@@ -145,6 +145,7 @@ int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
     if (d->memdom_id == -1) {
         goto fail;
     }
+    printf("[%s] memdom ID %d for domain %s\n", __func__, d->memdom_id, label);
     // don't forget to add the main thread to this memdom
     smv_join_domain(d->memdom_id, MAIN_THREAD);
 
