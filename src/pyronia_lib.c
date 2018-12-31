@@ -436,6 +436,9 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
     if (is_build)
       return malloc(size);
 
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+
     if (!runtime)
         return NULL;
 
@@ -502,6 +505,9 @@ void pyr_data_obj_free(void *addr) {
 
     if (is_build)
       free(addr);
+
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
 
     if (!runtime)
         return;
@@ -657,7 +663,7 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
     if (rw_obj) {
         pyr_data_obj_domain_t *dom = find_domain(rw_obj->domain_label, runtime->obj_domains_list);
         if (dom && dom->writable) {
-            memdom_priv_add(dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+            memdom_priv_del(dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
             printf("[%s] Revoke read/write privilege to domain %s for sandbox %s\n",
                    __func__, dom->label, sandbox_name);
             dom->writable = false;
@@ -778,6 +784,7 @@ void pyr_callstack_req_listen() {
     if (si_memdom == -1) {
         printf("[%s] Could not create SI thread memdom\n", __func__);
     }
+    printf("SI memdom = %d\n", si_memdom);
     smv_join_domain(si_memdom, si_smv_id);
     memdom_priv_add(si_memdom, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
 
