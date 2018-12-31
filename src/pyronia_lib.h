@@ -42,8 +42,8 @@ extern "C" {
     int pyr_is_isolated_data_obj(void *addr);
     pyr_data_obj_t *pyr_get_sandbox_rw_obj(void);
     int pyr_is_sandboxed(char *sandbox_name);
-    void pyr_grant_sandbox_access(char *sandbox_name);
-    void pyr_revoke_sandbox_access(char *sandbox_name);
+    void pyr_enter_sandbox(char *sandbox_name);
+    void pyr_exit_sandbox(void);
     int pyr_in_sandbox(void);
     int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
                         void*(fn)(void*), void* args);
