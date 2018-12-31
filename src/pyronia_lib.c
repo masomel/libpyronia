@@ -566,19 +566,9 @@ int pyr_is_sandboxed(char *sandbox_name) {
 /** Grants the main thread write access to the data object domains
  * for the given function sandbox.
  */
-void pyr_grant_sandbox_access(char *sandbox_name) {
+static pyr_func_sandbox_t *pyr_grant_sandbox_access(char *sandbox_name) {
     pyr_func_sandbox_t *sb = NULL;
 
-    if (is_build)
-      return;
-
-    // suspend if the stack tracer thread is running
-    pyr_is_inspecting();
-
-    if (!runtime) {
-        return;
-    }
-    
     /*    if (!strncmp(sandbox_name, "tweepy", 6))
           printf("[%s] Function FQN %s\n", __func__, sandbox_name);*/
 
@@ -616,28 +606,35 @@ void pyr_grant_sandbox_access(char *sandbox_name) {
     }
 
     sb->in_sandbox = true;
-    cur_sandbox = sb;
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
+    return sb;
 }
 
-/** Revokes the main thread write access to the data object domains
- * for the given function sandbox.
- */
-void pyr_revoke_sandbox_access(char *sandbox_name) {
+// Abstract away all operations that need to happen before
+// entering a function sandbox
+void pyr_enter_sandbox(char *sandbox_name) {
     pyr_func_sandbox_t *sb = NULL;
-
     if (is_build)
       return;
 
     // suspend if the stack tracer thread is running
     pyr_is_inspecting();
 
-    // let's skip adding write privs if our runtime
-    // doesn't have a domain or our domain is invalid
     if (!runtime) {
         return;
     }
+
+    sb = pyr_grant_sandbox_access(sandbox_name);
+    if (sb)
+        cur_sandbox = sb;
+}
+
+/** Revokes the main thread write access to the data object domains
+ * for the given function sandbox.
+ */
+static void pyr_revoke_sandbox_access(char *sandbox_name) {
+    pyr_func_sandbox_t *sb = NULL;
 
     pthread_mutex_lock(&security_ctx_mutex);
     sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
@@ -671,6 +668,31 @@ void pyr_revoke_sandbox_access(char *sandbox_name) {
     }
 
     sb->in_sandbox = false;
+ out:
+    pthread_mutex_unlock(&security_ctx_mutex);
+}
+
+void pyr_exit_sandbox() {
+    pyr_func_sandbox_t *sb = NULL;
+    bool in_sb = false;
+
+    if (is_build)
+      return;
+
+    // suspend if the stack tracer thread is running
+    pyr_is_inspecting();
+
+    // let's skip adding write privs if our runtime
+    // doesn't have a domain or our domain is invalid
+    if (!runtime) {
+        return;
+    }
+
+    pthread_mutex_lock(&security_ctx_mutex);
+    if (!cur_sandbox)
+      goto out;
+
+    pyr_revoke_sandbox_access(cur_sandbox->func_name);
     cur_sandbox = NULL;
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -718,7 +740,7 @@ pyr_data_obj_t *pyr_get_sandbox_rw_obj() {
     pthread_mutex_lock(&security_ctx_mutex);
     if (!cur_sandbox)
       goto out;
-    
+
     rw_obj = cur_sandbox->read_write;
     if (rw_obj) {
         rlog("[%s] Found RW object %s in domain %s for current sandbox %s\n",
