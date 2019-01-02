@@ -563,6 +563,67 @@ int pyr_is_sandboxed(char *sandbox_name) {
   return (sb != NULL);
 }
 
+void pyr_grant_data_obj_write(void *op) {
+  pyr_data_obj_domain_t * obj_dom = NULL;
+  
+  if (is_build)
+    return;
+  
+  // suspend if the stack tracer thread is running
+  pyr_is_inspecting();
+  
+  // let's skip adding write privs if our runtime
+  // doesn't have a domain or our domain is invalid
+  if (!runtime) {
+    return;
+  }
+  
+  if (!op) 
+    return;
+
+  obj_dom = get_data_obj_domain(op);
+  if (!obj_dom)
+    return;
+  
+  pthread_mutex_lock(&security_ctx_mutex);
+  if (!obj_dom->writable) {
+    memdom_priv_add(obj_dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+    // don't set writable flag to true since it's used to be on
+    // iff the interpreter is executing within a sandbox that has write
+    // access to this domain
+  }
+  pthread_mutex_unlock(&security_ctx_mutex);
+}
+
+void pyr_revoke_data_obj_write(void *op) {
+  pyr_data_obj_domain_t * obj_dom = NULL;
+  
+  if (is_build)
+    return;
+  
+  // suspend if the stack tracer thread is running
+  pyr_is_inspecting();
+  
+  // let's skip adding write privs if our runtime
+  // doesn't have a domain or our domain is invalid
+  if (!runtime) {
+    return;
+  }
+  
+  if (!op) 
+    return;
+
+  obj_dom = get_data_obj_domain(op);
+  if (!obj_dom)
+    return;
+  
+  pthread_mutex_lock(&security_ctx_mutex);
+  if (!obj_dom->writable) {
+    memdom_priv_del(obj_dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+  }
+  pthread_mutex_unlock(&security_ctx_mutex);
+}
+
 /** Grants the main thread write access to the data object domains
  * for the given function sandbox.
  */
