@@ -511,12 +511,12 @@ void pyr_data_obj_free(void *addr) {
 
     if (!runtime)
         return;
-    
-    pthread_mutex_lock(&security_ctx_mutex);
+
     domain = get_data_obj_domain(addr);
     if (!domain)
         goto out;
 
+    pthread_mutex_lock(&security_ctx_mutex);
     printf("[%s] Obj at %p in domain %s\n", __func__, addr, domain->label);
     if (!domain->writable)
       memdom_priv_add(domain->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
@@ -591,6 +591,7 @@ void pyr_grant_data_obj_write(void *op) {
     // don't set writable flag to true since it's used to be on
     // iff the interpreter is executing within a sandbox that has write
     // access to this domain
+    rlog("[%s] Object %p\n", __func__, op);
   }
   pthread_mutex_unlock(&security_ctx_mutex);
 }
@@ -620,6 +621,7 @@ void pyr_revoke_data_obj_write(void *op) {
   pthread_mutex_lock(&security_ctx_mutex);
   if (!obj_dom->writable) {
     memdom_priv_del(obj_dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+    rlog("[%s] Object %p\n", __func__, op);
   }
   pthread_mutex_unlock(&security_ctx_mutex);
 }
@@ -902,7 +904,7 @@ void pyr_exit() {
     if (runtime->main_path)
       pyr_free_critical_state(runtime->main_path);
     pyr_security_context_free(&runtime);
-    printf("[%s] Done\n", __func__);
+    rlog("[%s] Done\n", __func__);
 }
 
 /** Wrapper around the runtime callstack collection callback

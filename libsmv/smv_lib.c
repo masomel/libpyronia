@@ -281,7 +281,7 @@ int smvthread_create_attr(int smv_id, pthread_t* tid, const pthread_attr_t *attr
   smv_leave_domain(memdom_id, 0);
 #endif
   pthread_mutex_unlock(&create_thread_mutex);
-  fprintf(stderr, "smv %d is ready to run\n", smv_id);
+  rlog("[%s] smv %d is ready to run\n", __func__, smv_id);
   return smv_id;
 }
 
