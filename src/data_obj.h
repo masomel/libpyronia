@@ -9,11 +9,10 @@
 #include <stdbool.h>
 
 struct data_obj_domain {
-    int memdom_id;
     char *label;
-    void *addr;
-    size_t size;
-    bool writable;
+    int pool_size;
+    struct pyr_dom_alloc *memdom_pool;
+    struct pyr_dom_alloc *pool_tail;
 };
 
 typedef struct data_obj_domain pyr_data_obj_domain_t;

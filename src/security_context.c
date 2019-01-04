@@ -12,6 +12,26 @@
 #include "util.h"
 #include "serialization.h"
 
+static void free_dom_pool(pyr_dom_alloc_t **domp) {
+    pyr_dom_alloc_t *d = *domp;
+    int memdom_id = -1;
+
+    if (!d)
+        return;
+
+    if (d->next != NULL)
+        free_dom_pool(&d->next);
+
+    rlog("[%s] Domain pool allocation meta for memdom %d\n", __func__, d->memdom_id);
+
+    if (d->start)
+      memdom_free(d->start);
+    
+    smv_leave_domain(d->memdom_id, MAIN_THREAD);
+    memdom_kill(d->memdom_id);
+    *domp = NULL;
+}
+
 void free_pyr_data_obj(pyr_data_obj_t **objp) {
     pyr_data_obj_t *o = *objp;
     if (!o)
@@ -34,13 +54,8 @@ void free_pyr_data_obj_domain(pyr_data_obj_domain_t **domp) {
         return;
     if (d->label)
         free(d->label);
-    if (d->addr)
-        memdom_free(d->addr);
-    if (d->memdom_id > 0) {
-      smv_leave_domain(d->memdom_id, MAIN_THREAD);
-      memdom_kill(d->memdom_id);
-    }
-
+    if (d->memdom_pool)
+      free_dom_pool(&(d->memdom_pool));
     free(d);
     *domp = NULL;
 }
@@ -122,6 +137,37 @@ int new_pyr_data_obj(pyr_data_obj_t **objp,
     return err;
 }
 
+int new_dom_alloc(pyr_dom_alloc_t **domp) {
+  int memdom = -1;
+  pyr_dom_alloc_t *new_dom = NULL;
+
+  new_dom = malloc(sizeof(pyr_dom_alloc_t));
+  if (!new_dom)
+    goto fail;
+  memdom = memdom_create();
+  if(memdom == -1) {
+    printf("[%s] Could not create new dom alloc\n", __func__);
+    goto fail;
+  }
+  // don't forget to add the main thread to this memdom
+  smv_join_domain(memdom, MAIN_THREAD);
+
+  new_dom->memdom_id = memdom;
+  new_dom->start = NULL;
+  new_dom->size = 0;
+  new_dom->has_space = true;
+  new_dom->writable = false;
+  new_dom->next = NULL;
+
+  *domp = new_dom;
+  return 0;
+ fail:
+  if (new_dom)
+    free(new_dom);
+  *domp = NULL;
+  return -1;
+}
+
 // the caller has checked that the domain for this object exists
 int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
                             char *label) {
@@ -133,21 +179,18 @@ int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
         goto fail;
 
     d->label = NULL;
-    d->memdom_id = -1;
-    d->addr = NULL;
-    d->size = 0;
-    d->writable = false;
+    d->pool_size = 1;
+    d->memdom_pool = NULL;
+    d->pool_tail = NULL;
 
     if (copy_str(label, &d->label))
         goto fail;
 
-    d->memdom_id = memdom_create();
-    if (d->memdom_id == -1) {
+    if (new_dom_alloc(&(d->memdom_pool))) {
         goto fail;
     }
-    printf("[%s] memdom ID %d for domain %s\n", __func__, d->memdom_id, label);
-    // don't forget to add the main thread to this memdom
-    smv_join_domain(d->memdom_id, MAIN_THREAD);
+    d->pool_tail = d->memdom_pool; // needed so we can allocate new doms in the pool
+    printf("[%s] memdom ID %d for domain %s\n", __func__, d->memdom_pool->memdom_id, label);
 
     *domp = d;
     return 0;
@@ -382,24 +425,13 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     c->data_objs_list = NULL;
     c->obj_domains_list = NULL;
 
-    c->interp_doms = malloc(sizeof(pyr_interp_dom_alloc_t));
-    if (!c->interp_doms)
-      goto fail;
-    if ((interp_memdom = memdom_create()) == -1) {
+    if (new_dom_alloc(&(c->interp_doms))) {
       printf("[%s] Could not create interpreter dom # %d\n", __func__, 1);
       goto fail;
     }
 
-    // don't forget to add the main thread to this memdom
-    smv_join_domain(interp_memdom, MAIN_THREAD);
-    memdom_priv_add(interp_memdom, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-
-    c->interp_doms->memdom_id = interp_memdom;
-    c->interp_doms->start = NULL;
-    c->interp_doms->end = NULL;
-    c->interp_doms->has_space = true;
     c->interp_doms->writable = true;
-    c->interp_doms->next = NULL;
+    memdom_priv_add(c->interp_doms->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
 
     c->main_path = NULL;
     // this ensures that we really do revoke write access at the end of pyr_init
@@ -423,24 +455,6 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     return err;
 }
 
-static void free_interp_doms(pyr_interp_dom_alloc_t **domp) {
-    pyr_interp_dom_alloc_t *d = *domp;
-    int memdom_id = -1;
-
-    if (!d)
-        return;
-
-    if (d->next != NULL)
-        free_interp_doms(&d->next);
-
-    rlog("[%s] Interpreter allocation meta for memdom %d\n", __func__, d->memdom_id);
-
-    if (d->start)
-      memdom_free(d->start);
-    memdom_kill(d->memdom_id);
-    *domp = NULL;
-}
-
 void pyr_security_context_free(struct pyr_security_context **ctxp) {
     struct pyr_security_context *c = *ctxp;
     int i = 0;
@@ -453,7 +467,7 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
     free_obj_list(&c->data_objs_list);
     free_dom_list(&c->obj_domains_list);
     free_pyr_func_sandbox(&c->func_sandboxes);
-    free_interp_doms(&c->interp_doms);
+    free_dom_pool(&c->interp_doms);
     free(c);
     *ctxp = NULL;
 }
