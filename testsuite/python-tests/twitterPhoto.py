@@ -22,7 +22,7 @@ photo_name = msgformat.nice_name()
 print(photo_name)
 '''
 
-#image_lib.edgify(base_image, base_image_name)
+#proc = image_lib.edgify(base_image, base_image_name)
 
 # Replace each with the keys and tokens from your twitter app
 consumer_key = 'y0kc7BAIZHyrJUSr71tXAPCLc'
@@ -32,12 +32,13 @@ access_token_secret = 'AvfVJxVyTX3boqgB3AtzHhmAzZCOhKCLRP63zIsNIAcS9'
 
 # OAuth process, using the keys and tokens
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-print(repr(auth))
+print(str(hex(id(auth))))
 auth.set_access_token(access_token, access_token_secret)
-print(repr(auth))
+print(str(hex(id(auth))))
 
 # Creation of the actual interface, using authentication
 api = tweepy.API(auth)
+print(str(hex(id(api))))
 
 # Send photo to destination
 photo_path = base_image_name

