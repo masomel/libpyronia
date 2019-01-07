@@ -31,6 +31,8 @@ static int num_interp_memdoms_in_use = 1;
 static pyr_dom_alloc_t *allocs_tail = NULL;
 static pyr_func_sandbox_t *cur_sandbox = NULL;
 
+static void pyr_thread_setup(void);
+
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
  * channel and initialize the SMV backend.
@@ -72,18 +74,6 @@ int pyr_init(const char *main_mod_path,
         goto out;
     }
 
-    // create another SMV to be used by threads originally created by
-    // pthread_create. We won't allow mixing pthreads woth smvthreads
-    /*    pyr_smv_id = smv_create();
-    if (pyr_smv_id == -1) {
-      printf("[%s] Could not create an SMV for pyronia threads\n", __func__);
-      goto out;
-    }
-    // We need this SMV to be able to access any Python functions
-    smv_join_domain(MAIN_THREAD, pyr_smv_id);
-    memdom_priv_add(MAIN_THREAD, pyr_smv_id, MEMDOM_READ | MEMDOM_WRITE);
-    */
-
     /* Initialize the runtime's security context */
     err = pyr_security_context_alloc(&runtime, collect_callstack_cb,
                                      interpreter_lock_acquire_cb,
@@ -123,7 +113,7 @@ int pyr_init(const char *main_mod_path,
         goto out;
     }
 
-    //    PyEval_InitThreads(); // needed to enable stack inspector
+    pyr_thread_setup();
 
     pyr_callstack_req_listen();
     pyr_is_inspecting(); // we want to wait for the listener to be ready
@@ -255,6 +245,11 @@ static void new_interp_memdom() {
     memdom_priv_add(new_dom->memdom_id, si_smv_id, MEMDOM_READ);
   }
 
+  if (pyr_smv_id != -1) {
+    smv_join_domain(new_dom->memdom_id, pyr_smv_id);
+    memdom_priv_add(new_dom->memdom_id, pyr_smv_id, MEMDOM_READ);
+  }
+
   // insert at tail
   allocs_tail->next = new_dom;
   allocs_tail = new_dom;
@@ -348,6 +343,14 @@ void pyr_grant_critical_state_write(void *op) {
     }
 
     pthread_mutex_lock(&security_ctx_mutex);
+    // make sure we only call this function from main or pyr_smv
+    int cur_smv = smvthread_get_id();
+    if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
+      printf("[%s] Current thread with policy ID %d is not authorized\n",
+	     __func__, cur_smv);
+      goto out;
+    }
+
     // if the caller has given us an insecure object, exit
     if (op) {
       dalloc = get_dom_alloc(op, runtime->interp_doms);
@@ -357,7 +360,7 @@ void pyr_grant_critical_state_write(void *op) {
 	return;
       }
     }
-    
+
     // if the caller has given us an existing secure object to
     // modify, we should just go ahead an grant that particular
     // memdom the write access
@@ -407,6 +410,14 @@ void pyr_revoke_critical_state_write(void *op) {
     }
 
     pthread_mutex_lock(&security_ctx_mutex);
+    // make sure we only call this function from main or pyr_smv
+    int cur_smv = smvthread_get_id();
+    if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
+      printf("[%s] Current thread with policy ID %d is not authorized\n",
+	     __func__, cur_smv);
+      goto out;
+    }
+
     // if the caller has given us an insecure object, exit
     if (op) {
       dalloc = get_dom_alloc(op, runtime->interp_doms);
@@ -871,7 +882,7 @@ pyr_data_obj_t *pyr_get_sandbox_rw_obj() {
     return rw_obj;
 }
 
-/**** MISC PYRONIA API ****/
+/**** PYRONIA THREAD API ****/
 
 /** Starts an SMV thread that has access to the MAIN_THREAD memdom.
  * I.e. this is a wrapper for smvthread_create that is supposed to be used
@@ -882,7 +893,6 @@ pyr_data_obj_t *pyr_get_sandbox_rw_obj() {
 int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
                       void*(fn)(void*), void* args) {
     int ret = 0;
-    /*
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #undef pthread_create
 #endif
@@ -890,14 +900,39 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
     // suspend if the stack tracer thread is running
     pyr_is_inspecting();
 
+    printf("[%s] bootstrap = %p\n", __func__, args);
     ret = smvthread_create_attr(pyr_smv_id, tid, attr, fn, args);
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
+    if (ret > 0)
+      ret = 0; // users of pthread_create expect status 0 on success
 #define pthread_create(tid, attr, fn, args) pyr_thread_create(tid, attr, fn, args)
 #endif
-    */
     printf("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
     return ret;
 }
+
+static void pyr_thread_setup() {
+  // create another SMV to be used by threads originally created by
+  // pthread_create. We won't allow mixing pthreads woth smvthreads
+  pyr_smv_id = smv_create();
+  if (pyr_smv_id == -1) {
+    printf("[%s] Could not create an SMV for pyronia threads\n", __func__);
+    return;
+  }
+
+  // We need this SMV to be able to access any Python functions
+  smv_join_domain(MAIN_THREAD, pyr_smv_id);
+  memdom_priv_add(MAIN_THREAD, pyr_smv_id, MEMDOM_READ | MEMDOM_WRITE);
+
+  pyr_dom_alloc_t *dalloc = runtime->interp_doms;
+  while(dalloc) {
+    smv_join_domain(dalloc->memdom_id, pyr_smv_id);
+    memdom_priv_add(dalloc->memdom_id, pyr_smv_id, MEMDOM_READ);
+    dalloc = dalloc->next;
+  }
+}
+
+/**** SI API ****/
 
 /** Starts the SI listener and dispatch thread.
  */

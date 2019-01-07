@@ -18,7 +18,7 @@ struct pyr_data_obj {
 
 typedef struct pyr_data_obj pyr_data_obj_t;
 
-//#define PYR_INTERCEPT_PTHREAD_CREATE
+#define PYR_INTERCEPT_PTHREAD_CREATE
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #define pthread_create(tid, attr, fn, args) pyr_thread_create(tid, attr, fn, args)
 #endif
