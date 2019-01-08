@@ -469,8 +469,8 @@ static void new_data_obj_memdom(char *label) {
   // insert at tail
   obj_dom->pool_tail->next = new_dom;
   obj_dom->pool_tail = new_dom;
-
   obj_dom->pool_size++;
+  rlog("[%s] Memdom ID %d for domain %s\n", __func__, new_dom->memdom_id, label);
   return;
  fail:
   if (new_dom)
@@ -924,7 +924,7 @@ void pyr_callstack_req_listen() {
     if (si_memdom == -1) {
         printf("[%s] Could not create SI thread memdom\n", __func__);
     }
-    printf("SI memdom = %d\n", si_memdom);
+    rlog("SI memdom = %d\n", si_memdom);
     smv_join_domain(si_memdom, si_smv_id);
     memdom_priv_add(si_memdom, si_smv_id, MEMDOM_READ | MEMDOM_WRITE);
 

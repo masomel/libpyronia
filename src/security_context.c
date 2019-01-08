@@ -24,8 +24,10 @@ static void free_dom_pool(pyr_dom_alloc_t **domp) {
 
     rlog("[%s] Domain pool allocation meta for memdom %d\n", __func__, d->memdom_id);
 
-    if (d->start)
+    if (d->start) {
+      memdom_priv_add(d->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
       memdom_free(d->start);
+    }
     
     smv_leave_domain(d->memdom_id, MAIN_THREAD);
     memdom_kill(d->memdom_id);
