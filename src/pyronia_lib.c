@@ -30,6 +30,7 @@ static pthread_t recv_th;
 static int num_interp_memdoms_in_use = 1;
 static pyr_dom_alloc_t *allocs_tail = NULL;
 static pyr_func_sandbox_t *cur_sandbox = NULL;
+static int num_pyr_threads = 0;
 
 static void pyr_thread_setup(void);
 
@@ -344,11 +345,13 @@ void pyr_grant_critical_state_write(void *op) {
 
     pthread_mutex_lock(&security_ctx_mutex);
     // make sure we only call this function from main or pyr_smv
-    int cur_smv = smvthread_get_id();
-    if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
-      printf("[%s] Current thread with policy ID %d is not authorized\n",
-	     __func__, cur_smv);
-      goto out;
+    if (num_pyr_threads > 0) {
+      int cur_smv = smvthread_get_id();
+      if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
+	printf("[%s] Current thread with policy ID %d is not authorized\n",
+	       __func__, cur_smv);
+	goto out;
+      }
     }
 
     // if the caller has given us an insecure object, exit
@@ -411,11 +414,13 @@ void pyr_revoke_critical_state_write(void *op) {
 
     pthread_mutex_lock(&security_ctx_mutex);
     // make sure we only call this function from main or pyr_smv
-    int cur_smv = smvthread_get_id();
-    if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
-      printf("[%s] Current thread with policy ID %d is not authorized\n",
-	     __func__, cur_smv);
-      goto out;
+    if (num_pyr_threads > 0) {
+      int cur_smv = smvthread_get_id();
+      if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
+	printf("[%s] Current thread with policy ID %d is not authorized\n",
+	       __func__, cur_smv);
+	goto out;
+      }
     }
 
     // if the caller has given us an insecure object, exit
