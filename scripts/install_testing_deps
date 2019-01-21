@@ -1,3 +1,0 @@
-#!/bin/bash
-
-sudo apt install swig autoconf libtool python2.7-dev bison libncurses-dev git openssh-server libssl-dev libnl-genl-3-dev
