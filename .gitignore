@@ -1,7 +1,5 @@
 cscope.*
 autom4te.cache/
-Makefile.*
-Makefile
 CMakeCache.txt
 CMakeFiles/
 build/
@@ -21,26 +19,5 @@ cmake_install.cmake
 *.pdf
 *.toc
 
-libapparmor/libraries/libapparmor/aclocal.m4
-libapparmor/libraries/libapparmor/configure
-libapparmor/libraries/libapparmor/ltmain.sh
-libapparmor/profiles/apparmor.d/local/
-libapparmor/binutils/aa-enabled
-libapparmor/binutils/aa-exec
-libapparmor/libraries/libapparmor/config.status
-libapparmor/libraries/libapparmor/libtool
-libapparmor/libraries/libapparmor/src/.deps/
-libapparmor/libraries/libapparmor/src/.libs/
-libapparmor/libraries/libapparmor/src/libapparmor.la
-libapparmor/libraries/libapparmor/src/libapparmor.pc
-libapparmor/libraries/libapparmor/swig/perl/LibAppArmor.bs
-libapparmor/libraries/libapparmor/swig/perl/LibAppArmor.pm
-libapparmor/libraries/libapparmor/swig/perl/MYMETA.json
-libapparmor/libraries/libapparmor/swig/perl/MYMETA.yml
-libapparmor/libraries/libapparmor/swig/perl/blib/
-libapparmor/libraries/libapparmor/swig/perl/pm_to_blib
-libapparmor/libraries/libapparmor/testsuite/.deps/
-libapparmor/libraries/libapparmor/testsuite/.libs/
-libapparmor/libraries/libapparmor/testsuite/test_multi.multi
-libapparmor/parser/apparmor_parser
-libapparmor/parser/libapparmor_re/libapparmor_re.a
+src/Makefile
+libsmv/Makefile
