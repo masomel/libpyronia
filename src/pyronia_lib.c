@@ -50,7 +50,7 @@ int pyr_init(const char *main_mod_path,
     char **obj_policy = NULL;
     int num_obj_rules = 0;
 
-    is_inspecting_stack = true;
+    is_inspecting_stack = false;
     rlog("[%s] Initializing pyronia for module %s\n", __func__, main_mod_path);
 
     // We make an exception for setup.py and the sysconfig modules
@@ -116,6 +116,7 @@ int pyr_init(const char *main_mod_path,
 
     pyr_thread_setup();
 
+    is_inspecting_stack = true;
     pyr_callstack_req_listen();
     pyr_is_inspecting(); // we want to wait for the listener to be ready
  out:
