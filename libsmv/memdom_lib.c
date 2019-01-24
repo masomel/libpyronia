@@ -562,7 +562,7 @@ void memdom_free(void* data){
     return;
   }
   else if (memdom_id == 0) {
-    rlog("[%s] Freeing memory in main thread memdom\n", __func__);
+    printf("[%s] Freeing memory in main thread memdom\n", __func__);
     free(data);
     return;
   }

@@ -75,7 +75,6 @@ static int init_epoll() {
   }
 
   const int fd = get_si_fd();
-  printf("[%s] socket FD = %d\n", __func__, fd);
   struct epoll_event ev = {
     .events = EPOLLIN,
     .data = { .fd = fd, },
@@ -236,7 +235,7 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
     callstack = pyr_collect_runtime_callstack();
     err = pyr_serialize_callstack(&callstack_str, callstack);
     if (err > 0) {
-        printf("[%s] Sending serialized callstack %s (%d bytes) to kernel\n", __func__, callstack_str, err);
+        rlog("[%s] Sending serialized callstack %s (%d bytes) to kernel\n", __func__, callstack_str, err);
     }
     
  out:
