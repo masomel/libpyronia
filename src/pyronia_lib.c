@@ -33,6 +33,7 @@ static pyr_func_sandbox_t *cur_sandbox = NULL;
 static int num_pyr_threads = 0;
 
 static void pyr_thread_setup(void);
+static struct pyr_thread *get_cur_pyr_thread(void);
 
 /** Do all the necessary setup for a language runtime to use
  * the Pyronia extensions: open the stack inspection communication
@@ -228,7 +229,8 @@ static int free_dom_alloc(void *op, pyr_dom_alloc_t *pool) {
 
 static void new_interp_memdom() {
   pyr_dom_alloc_t *new_dom = NULL;
-
+  struct pyr_thread *th = NULL;
+  
   if (num_interp_memdoms_in_use+1 > MAX_NUM_INTERP_DOMS)
     return;
 
@@ -236,9 +238,6 @@ static void new_interp_memdom() {
     printf("[%s] Could not create interpreter dom # %d\n", __func__, num_interp_memdoms_in_use+1);
     goto fail;
   }
-
-  new_dom->writable_main = true;
-  memdom_priv_add(new_dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
 
   // for big profiles, we're going to be calling this functions before
   // we even launch the SI thread
@@ -250,6 +249,19 @@ static void new_interp_memdom() {
   if (pyr_smv_id != -1) {
     smv_join_domain(new_dom->memdom_id, pyr_smv_id);
     memdom_priv_add(new_dom->memdom_id, pyr_smv_id, MEMDOM_READ);
+  }
+
+  th = get_cur_pyr_thread();
+  if (!th)
+      goto fail;
+
+  if (th->smv_id == MAIN_THREAD) {
+      new_dom->writable_main = true;
+      memdom_priv_add(new_dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+  }
+  else if (th->smv_id == pyr_smv_id) {
+      new_dom->pyr_thread_refcnt = 1;
+      memdom_priv_add(new_dom->memdom_id, pyr_smv_id, MEMDOM_READ | MEMDOM_WRITE);
   }
 
   // insert at tail
@@ -331,7 +343,8 @@ int pyr_is_critical_state(void *op) {
 void pyr_grant_critical_state_write(void *op) {
     int i = 0;
     pyr_dom_alloc_t *dalloc = NULL;
-
+    int cur_smv = -1;
+    
     if (is_build)
       return;
 
@@ -347,12 +360,19 @@ void pyr_grant_critical_state_write(void *op) {
     pthread_mutex_lock(&security_ctx_mutex);
     // make sure we only call this function from main or pyr_smv
     if (num_pyr_threads > 0) {
-      int cur_smv = smvthread_get_id();
-      if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
-	printf("[%s] Current thread with policy ID %d is not authorized\n",
-	       __func__, cur_smv);
-	goto out;
-      }
+        struct pyr_thread *th = NULL;
+        th = get_cur_pyr_thread();
+        if (!th)
+            goto out;
+        cur_smv = th->smv_id;
+        if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
+            printf("[%s] Current thread with policy ID %d is not authorized\n",
+                   __func__, cur_smv);
+            goto out;
+        }
+    }
+    else {
+        cur_smv = MAIN_THREAD;
     }
 
     // if the caller has given us an insecure object, exit
@@ -363,15 +383,25 @@ void pyr_grant_critical_state_write(void *op) {
 	pthread_mutex_unlock(&security_ctx_mutex);
 	return;
       }
-    }
 
-    // if the caller has given us an existing secure object to
-    // modify, we should just go ahead an grant that particular
-    // memdom the write access
-    if (op && !dalloc->writable) {
-      memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
-      dalloc->writable = true;
-      rlog("[%s] Granted write access to obj in memdom %d\n", __func__, dalloc->memdom_id);
+      // if the caller has given us an existing secure object to
+      // modify, we should just go ahead an grant that particular
+      // memdom the write access
+      if (cur_smv == MAIN_THREAD) {
+          if (!dalloc->writable_main) {
+              memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+              dalloc->writable_main = true;
+              rlog("[%s] Granted main thread write access to obj in memdom %d\n", __func__, dalloc->memdom_id);
+          }
+          runtime->nested_grants++;
+      }
+      else {
+          if (!dalloc->pyr_thread_refcnt) {
+              memdom_priv_add(dalloc->memdom_id, pyr_smv_id, MEMDOM_WRITE);
+              rlog("[%s] Granted Pyr thread write access to obj in memdom %d\n", __func__, dalloc->memdom_id);
+          }
+          dalloc->pyr_thread_refcnt++;
+      }
       goto out;
     }
 
@@ -380,19 +410,31 @@ void pyr_grant_critical_state_write(void *op) {
     // slight optimization: if we've already granted access
     // let's avoid another downcall to change the memdom privileges
     // and simply keep track of how many times we've granted access
-    if (runtime->nested_grants == 0) {
-      dalloc = runtime->interp_doms;
-      while(dalloc) {
-        if (dalloc->has_space) {
-          memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
-          dalloc->writable = true;
-          rlog("[%s] Granted write access to memdom %d\n", __func__, dalloc->memdom_id);
+    dalloc = runtime->interp_doms;
+    if (cur_smv == MAIN_THREAD) {
+        if (runtime->nested_grants == 0) {
+            while(dalloc) {
+                if (dalloc->has_space) {
+                    memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+                    dalloc->writable_main = true;
+                    rlog("[%s] Granted main thread write access to memdom %d\n", __func__, dalloc->memdom_id);
+                }
+                dalloc = dalloc->next;
+            }
         }
-        dalloc = dalloc->next;
-      }
+        runtime->nested_grants++;
+    }
+    else {
+        while(dalloc) {
+            if (dalloc->pyr_thread_refcnt == 0) {
+                memdom_priv_add(dalloc->memdom_id, pyr_smv_id, MEMDOM_WRITE);
+                rlog("[%s] Granted Pyr thread write access to memdom %d\n", __func__, dalloc->memdom_id);
+            }
+            dalloc->pyr_thread_refcnt++;
+            dalloc = dalloc->next;
+        }
     }
  out:
-    runtime->nested_grants++;
     pthread_mutex_unlock(&security_ctx_mutex);
 }
 
@@ -401,6 +443,8 @@ void pyr_grant_critical_state_write(void *op) {
 void pyr_revoke_critical_state_write(void *op) {
     int i = 0;
     pyr_dom_alloc_t *dalloc = NULL;
+    int cur_smv = -1;
+                        
     if (is_build)
       return;
 
@@ -416,12 +460,20 @@ void pyr_revoke_critical_state_write(void *op) {
     pthread_mutex_lock(&security_ctx_mutex);
     // make sure we only call this function from main or pyr_smv
     if (num_pyr_threads > 0) {
-      int cur_smv = smvthread_get_id();
-      if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
-	printf("[%s] Current thread with policy ID %d is not authorized\n",
-	       __func__, cur_smv);
-	goto out;
-      }
+        struct pyr_thread *th = NULL;
+        th = get_cur_pyr_thread();
+        if (!th)
+            goto out;
+        cur_smv = th->smv_id;
+
+        if (cur_smv != MAIN_THREAD && cur_smv != pyr_smv_id) {
+            printf("[%s] Current thread with policy ID %d is not authorized\n",
+                   __func__, cur_smv);
+            goto out;
+        }
+    }
+    else {
+        cur_smv = MAIN_THREAD;
     }
 
     // if the caller has given us an insecure object, exit
@@ -432,28 +484,49 @@ void pyr_revoke_critical_state_write(void *op) {
 	pthread_mutex_unlock(&security_ctx_mutex);
 	return;
       }
-    }
 
-    rlog("[%s] Number of grants: %d\n", __func__, runtime->nested_grants);
-    runtime->nested_grants--;
-    if (op && runtime->nested_grants == 0) {
-      memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
-      dalloc->writable = false;
-      rlog("[%s] Revoked write access for obj in domain %d\n", __func__, dalloc->memdom_id);
+      if (cur_smv == MAIN_THREAD) {
+          runtime->nested_grants--;
+          if (!runtime->nested_grants) {
+              memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+              dalloc->writable_main = false;
+              rlog("[%s] Revoked write access for obj in domain %d\n", __func__, dalloc->memdom_id);
+          }
+      }
+      else {
+          dalloc->pyr_thread_refcnt--;
+          if (!dalloc->pyr_thread_refcnt) {
+              memdom_priv_del(dalloc->memdom_id, pyr_smv_id, MEMDOM_WRITE);
+              rlog("[%s] Revoked Pyr thread write access to obj in memdom %d\n", __func__, dalloc->memdom_id);
+          }
+      }
       goto out;
     }
 
     // same optimization as above
-    if (runtime->nested_grants == 0) {
-      dalloc = runtime->interp_doms;
-      while(dalloc) {
-        if (dalloc->writable) {
-          memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
-          dalloc->writable = false;
-          rlog("[%s] Revoked write access to domain %d\n", __func__, dalloc->memdom_id);
+    dalloc = runtime->interp_doms;
+    if (cur_smv == MAIN_THREAD) {
+        runtime->nested_grants--;
+        if (runtime->nested_grants == 0) {
+            while(dalloc) {
+                if (dalloc->writable_main) {
+                    memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+                    dalloc->writable_main = false;
+                    rlog("[%s] Revoked main thread write access to memdom %d\n", __func__, dalloc->memdom_id);
+                }
+                dalloc = dalloc->next;
+            }
         }
-        dalloc = dalloc->next;
-      }
+    }
+    else {
+        while(dalloc) {
+            dalloc->pyr_thread_refcnt--;
+            if (dalloc->pyr_thread_refcnt == 0) {
+                memdom_priv_del(dalloc->memdom_id, pyr_smv_id, MEMDOM_WRITE);
+                rlog("[%s] Revoked Pyr thread write access to memdom %d\n", __func__, dalloc->memdom_id);
+            }
+            dalloc = dalloc->next;
+        }
     }
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -478,8 +551,8 @@ static void new_data_obj_memdom(char *label) {
 
   // since this is only going to be called within a sandbox
   // we can safely add write access if the rest of the domain has write access
-  if (obj_dom->memdom_pool->writable) {
-    new_dom->writable = true;
+  if (obj_dom->memdom_pool->writable_main) {
+    new_dom->writable_main = true;
   }
   memdom_priv_add(new_dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
   
@@ -568,10 +641,10 @@ void pyr_data_obj_free(void *addr) {
 
     pthread_mutex_lock(&security_ctx_mutex);
     rlog("[%s] Obj at %p in domain %d\n", __func__, addr, dalloc->memdom_id);
-    if (!dalloc->writable)
+    if (!dalloc->writable_main)
       memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
     memdom_free(addr);
-    if (!dalloc->writable)
+    if (!dalloc->writable_main)
       memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
 
  out:
@@ -636,7 +709,7 @@ void pyr_grant_data_obj_write(void *op) {
     return;
   
   pthread_mutex_lock(&security_ctx_mutex);
-  if (!obj_dom->writable) {
+  if (!obj_dom->writable_main) {
     memdom_priv_add(obj_dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
     // don't set writable flag to true since it's used to be on
     // iff the interpreter is executing within a sandbox that has write
@@ -669,7 +742,7 @@ void pyr_revoke_data_obj_write(void *op) {
     return;
   
   pthread_mutex_lock(&security_ctx_mutex);
-  if (!obj_dom->writable) {
+  if (!obj_dom->writable_main) {
     memdom_priv_del(obj_dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
     rlog("[%s] Object %p\n", __func__, op);
   }
@@ -719,9 +792,9 @@ static pyr_func_sandbox_t *pyr_grant_sandbox_access(char *sandbox_name) {
         if (dom) {
 	  pyr_dom_alloc_t *dalloc = dom->memdom_pool;
 	  while(dalloc) {
-	    if (dalloc->has_space && !dalloc->writable) {
+	    if (dalloc->has_space && !dalloc->writable_main) {
 	      memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-	      dalloc->writable = true;
+	      dalloc->writable_main = true;
 	    }
 	    dalloc = dalloc->next;
 	  }
@@ -794,9 +867,9 @@ static void pyr_revoke_sandbox_access(char *sandbox_name) {
         if (dom) {
 	  pyr_dom_alloc_t *dalloc = dom->memdom_pool;
 	  while(dalloc) {
-	    if (dalloc->writable) {
+	    if (dalloc->writable_main) {
 	      memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
-	      dalloc->writable = false;
+	      dalloc->writable_main = false;
 	    }
 	    dalloc = dalloc->next;
 	  }
@@ -920,6 +993,7 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
       runtime->pyr_threads = new_th;
       printf("[%s] Added new Pyr thread %lu\n", __func__, new_th->self);
     }
+    num_pyr_threads++;
     pthread_mutex_unlock(&security_ctx_mutex);
     
     printf("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
@@ -945,6 +1019,19 @@ static void pyr_thread_setup() {
     memdom_priv_add(dalloc->memdom_id, pyr_smv_id, MEMDOM_READ);
     dalloc = dalloc->next;
   }
+}
+
+// Assumes caller holds security_ctx_mutex
+static struct pyr_thread *get_cur_pyr_thread() {
+    struct pyr_thread *th = runtime->pyr_threads;
+    pthread_t cur_thread = pthread_self();
+
+    while (th != NULL) {
+        if (pthread_equal(th->self, cur_thread)) {
+            return th;
+        }
+    }
+    return NULL;
 }
 
 /**** SI API ****/
