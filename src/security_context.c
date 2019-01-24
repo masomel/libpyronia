@@ -110,6 +110,19 @@ void free_pyr_func_sandbox(pyr_func_sandbox_t **sbp) {
     *sbp = NULL;
 }
 
+void free_pyr_thread(struct pyr_thread **thp) {
+  struct pyr_thread *th = *thp;
+
+  if (!th)
+    return;
+
+  if (th->next)
+    free_pyr_thread(&th->next);
+
+  free(th);
+  *thp = NULL;
+}
+
 // the caller has checked that the domain for this object exists
 int new_pyr_data_obj(pyr_data_obj_t **objp,
                      char *name, char *dom_label) {
@@ -158,7 +171,8 @@ int new_dom_alloc(pyr_dom_alloc_t **domp) {
   new_dom->start = NULL;
   new_dom->size = 0;
   new_dom->has_space = true;
-  new_dom->writable = false;
+  new_dom->writable_main = false;
+  new_dom->pyr_thread_refcnt = 0;
   new_dom->next = NULL;
 
   *domp = new_dom;
@@ -227,6 +241,24 @@ int new_pyr_func_sandbox(pyr_func_sandbox_t **sbp, char *func_name) {
         free_pyr_func_sandbox(&s);
     *sbp = NULL;
     return err;
+}
+
+int new_pyr_thread(struct pyr_thread **thp, pthread_t tid, int smv_id) {
+  struct pyr_thread *th = NULL;
+  int err = -1;
+
+  th = malloc(sizeof(struct pyr_thread));
+  if (!th)
+    goto out;
+
+  th->self = tid;
+  th->smv_id = smv_id;
+  th->next = NULL;
+  err = 0;
+  
+ out:
+  *thp = th;
+  return err;
 }
 
 pyr_func_sandbox_t *find_sandbox(char *func_name,
@@ -426,13 +458,12 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
     c->func_sandboxes = NULL;
     c->data_objs_list = NULL;
     c->obj_domains_list = NULL;
-
     if (new_dom_alloc(&(c->interp_doms))) {
       printf("[%s] Could not create interpreter dom # %d\n", __func__, 1);
       goto fail;
     }
 
-    c->interp_doms->writable = true;
+    c->interp_doms->writable_main = true;
     memdom_priv_add(c->interp_doms->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
 
     c->main_path = NULL;
@@ -444,6 +475,11 @@ int pyr_security_context_alloc(struct pyr_security_context **ctxp,
         err = -EINVAL;
         goto fail;
         }*/
+    c->pyr_threads = NULL;
+    err = new_pyr_thread(&c->pyr_threads, pthread_self(), MAIN_THREAD);
+    if (err)
+      goto fail;
+    
     c->collect_callstack_cb = collect_callstack_cb;
     c->interpreter_lock_acquire_cb = interpreter_lock_acquire_cb;
     c->interpreter_lock_release_cb = interpreter_lock_release_cb;
@@ -466,6 +502,7 @@ void pyr_security_context_free(struct pyr_security_context **ctxp) {
 
     rlog("[%s] Freeing security context %p\n", __func__, c);
 
+    free_pyr_thread(&c->pyr_threads);
     free_obj_list(&c->data_objs_list);
     free_dom_list(&c->obj_domains_list);
     free_pyr_func_sandbox(&c->func_sandboxes);

@@ -10,15 +10,22 @@
 
 #include <stdbool.h>
 
-#define MAX_NUM_INTERP_DOMS 200
+#define MAX_NUM_INTERP_DOMS 256
 #define MAX_OBJ_DOM_POOL_SIZE 5
+
+struct pyr_thread {
+  pthread_t self;
+  int smv_id;
+  struct pyr_thread *next;
+};
 
 struct pyr_dom_alloc {
     int memdom_id;
     void *start;
-    size_t size;;
+    size_t size;
     bool has_space;
-    bool writable;
+    bool writable_main;
+    int pyr_thread_refcnt;
     struct pyr_dom_alloc *next;
 };
 
@@ -44,6 +51,8 @@ struct pyr_security_context {
      * functions, let's basically keep a reference count. */
     uint32_t nested_grants;
 
+    struct pyr_thread *pyr_threads;
+  
     /* The function used to collect a language runtime-specific
      * callstack. This callback needs to be set at initialization time. */
     pyr_cg_node_t *(*collect_callstack_cb)(void);
@@ -63,6 +72,7 @@ extern "C" {
     int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
                                  struct pyr_security_context **ctx);
     int new_dom_alloc(pyr_dom_alloc_t **domp);
+    int new_pyr_thread(struct pyr_thread **thp, pthread_t tid, int smv_id);
 
 #ifdef __cplusplus
 }

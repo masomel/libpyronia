@@ -237,7 +237,7 @@ static void new_interp_memdom() {
     goto fail;
   }
 
-  new_dom->writable = true;
+  new_dom->writable_main = true;
   memdom_priv_add(new_dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
 
   // for big profiles, we're going to be calling this functions before
@@ -899,6 +899,7 @@ pyr_data_obj_t *pyr_get_sandbox_rw_obj() {
 int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
                       void*(fn)(void*), void* args) {
     int ret = 0;
+    struct pyr_thread *new_th = NULL;
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
 #undef pthread_create
 #endif
@@ -906,13 +907,21 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
     // suspend if the stack tracer thread is running
     pyr_is_inspecting();
 
-    printf("[%s] bootstrap = %p\n", __func__, args);
     ret = smvthread_create_attr(pyr_smv_id, tid, attr, fn, args);
 #ifdef PYR_INTERCEPT_PTHREAD_CREATE
     if (ret > 0)
       ret = 0; // users of pthread_create expect status 0 on success
 #define pthread_create(tid, attr, fn, args) pyr_thread_create(tid, attr, fn, args)
 #endif
+    ret = new_pyr_thread(&new_th, *tid, pyr_smv_id);
+    pthread_mutex_lock(&security_ctx_mutex);
+    if (!ret) {
+      new_th->next = runtime->pyr_threads;
+      runtime->pyr_threads = new_th;
+      printf("[%s] Added new Pyr thread %lu\n", __func__, new_th->self);
+    }
+    pthread_mutex_unlock(&security_ctx_mutex);
+    
     printf("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
     return ret;
 }
