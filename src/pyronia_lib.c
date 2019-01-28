@@ -294,7 +294,7 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
   pthread_mutex_lock(&security_ctx_mutex);
   new_block = alloc_memdom_pool(runtime->interp_doms, num_interp_memdoms_in_use,
 				true, NULL, size);
-  printf("[%s] New interp dom buffer %p\n", __func__, new_block);
+  rlog("[%s] New interp dom buffer %p\n", __func__, new_block);
   pthread_mutex_unlock(&security_ctx_mutex);
   return new_block;
   
