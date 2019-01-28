@@ -575,7 +575,7 @@ void memdom_free(void* data){
   alloc = walkAllocsList(memdom_id, data, 1);
   if (!alloc) {
       rlog("[%s] Something went wrong. Data block at %p not found\n", __func__, data);
-    return;
+      goto out;
   }
 
   /* Free the memory */
@@ -591,6 +591,7 @@ void memdom_free(void* data){
   rlog("[%s] Move alloc to free list\n", __func__);
   rlog("Current allocations: %lu bytes\n", memdom[memdom_id]->cur_alloc);
 
+ out:
   pthread_mutex_unlock(&memdom[memdom_id]->mlock);
 }
 
