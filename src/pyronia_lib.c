@@ -1031,6 +1031,7 @@ static struct pyr_thread *get_cur_pyr_thread() {
         if (pthread_equal(th->self, cur_thread)) {
             return th;
         }
+	th = th->next;
     }
     return NULL;
 }

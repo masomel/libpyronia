@@ -8,22 +8,24 @@ SHADOW_CLIENT = "myShadowClient"
 # this device.
 HOST_NAME = "a2t65gjx7e9mk3-ats.iot.us-west-2.amazonaws.com"
 
+path = "/home/pyronia/libpyronia/apps/aws-moisture-sensor"
+
 # The relative path to the correct root CA file for AWS IoT, 
 # which you have already saved onto this device.
-ROOT_CA = "AmazonRootCA1.pem"
+ROOT_CA = path+"/AmazonRootCA1.pem"
 
 # The relative path to your private key file that 
 # AWS IoT generated for this device, which you 
 # have already saved onto this device.
-PRIVATE_KEY = "12ab3cd456-private.pem.key"
+PRIVATE_KEY = path+"/df401a2b29-private.pem.key"
 
 # The relative path to your certificate file that 
 # AWS IoT generated for this device, which you 
 # have already saved onto this device.
-CERT_FILE = "12ab3cd456-certificate.pem.crt.txt"
+CERT_FILE = path+"/df401a2b29-certificate.pem.cert.txt"
 
 # A programmatic shadow handler name prefix.
-SHADOW_HANDLER = "MyRPi"
+SHADOW_HANDLER = "pyronia-vm"
 
 # Automatically called whenever the shadow is updated.
 def myShadowUpdateCallback(payload, responseStatus, token):
