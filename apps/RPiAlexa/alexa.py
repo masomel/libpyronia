@@ -144,8 +144,8 @@ if __name__ == "__main__":
     '''
     while internet_on() == False:
         print(".")
-    '''
     token = gettoken()
+    '''
     os.system('mpg123 -q {}1sec.mp3 {}hello.mp3'.format(path, path))
     for x in range(0, 3):
         time.sleep(.1)

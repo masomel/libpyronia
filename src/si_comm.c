@@ -195,7 +195,7 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
     char *callstack_str = NULL;
     int err = -1;
 
-    printf("[%s] Handling call stack request...\n", __func__);
+    rlog("[%s] Handling call stack request...\n", __func__);
     
     // the condition will be set to false at the top of the
     // recv loop (i.e. after this function returns)
@@ -270,7 +270,7 @@ void *pyr_recv_from_kernel(void *args) {
       goto out;
     }
     else if (ready == 0) {
-      printf("[%s] Polling SI socket timed out. Try again\n", __func__);
+      rlog("[%s] Polling SI socket timed out. Try again\n", __func__);
     }
     else if (ready == 1) {
       struct nl_msg *new_msg = NULL;
