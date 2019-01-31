@@ -99,11 +99,11 @@ int pyr_init(const char *main_mod_path,
 
     if (obj_policy && num_obj_rules) {
       err = pyr_parse_data_obj_rules(obj_policy, num_obj_rules,
-				     &runtime);
+                                     &runtime);
       if (err) {
         printf("[%s] Parsing data object policy failure: %d\n",
                __func__, err);
-	goto out;
+        goto out;
       }
     }
 
@@ -135,54 +135,54 @@ static void new_interp_memdom(void);
 static void new_data_obj_memdom(char *);
 
 static void *alloc_memdom_pool(pyr_dom_alloc_t *pool, int pool_size,
-			       int is_interp_dom, char *opt_label,
-			       size_t size) {
+                               int is_interp_dom, char *opt_label,
+                               size_t size) {
   void *new_block = NULL;
   int i = 1;
   pyr_dom_alloc_t *dalloc = NULL;
-  
+
   if(size > MEMDOM_HEAP_SIZE) {
     rlog("[%s] Requested size is too large for interpreter dom.\n", __func__);
     return malloc(size);
   }
-  
+
   dalloc = pool;
   while(dalloc) {
     if (dalloc->has_space &&
-	memdom_get_free_bytes(dalloc->memdom_id) >= size) {
+        memdom_get_free_bytes(dalloc->memdom_id) >= size) {
       new_block = memdom_alloc(dalloc->memdom_id, size);
-      
+
       if (new_block) {
-	if (!dalloc->start) {
-	  // this is our first allocation in this memdom
-	  // so update the allocation metadata
-	  dalloc->start = new_block;
-	  dalloc->size = MEMDOM_HEAP_SIZE;
-	  rlog("[%s] Memdom %d at %p\n", __func__, dalloc->memdom_id, dalloc->start);
-	}
-	rlog("[%s] Allocated %lu bytes in memdom %d\n", __func__, size, dalloc->memdom_id);
-	break;
+        if (!dalloc->start) {
+          // this is our first allocation in this memdom
+          // so update the allocation metadata
+          dalloc->start = new_block;
+          dalloc->size = MEMDOM_HEAP_SIZE;
+          rlog("[%s] Memdom %d at %p\n", __func__, dalloc->memdom_id, dalloc->start);
+        }
+        rlog("[%s] Allocated %lu bytes in memdom %d\n", __func__, size, dalloc->memdom_id);
+        break;
       }
       else {
-	dalloc->has_space = false;
-	rlog("[%s] Memdom allocator could not find a suitable block in memdom %d\n", __func__, dalloc->memdom_id);
-	if (dalloc->next == NULL) {
-	  if (is_interp_dom)
-	    new_interp_memdom();
-	  else
-	    new_data_obj_memdom(opt_label);
-	}
+        dalloc->has_space = false;
+        rlog("[%s] Memdom allocator could not find a suitable block in memdom %d\n", __func__, dalloc->memdom_id);
+        if (dalloc->next == NULL) {
+          if (is_interp_dom)
+            new_interp_memdom();
+          else
+            new_data_obj_memdom(opt_label);
+        }
       }
     }
     else {
       if (dalloc->has_space)
-	dalloc->has_space = false;
+        dalloc->has_space = false;
       if (pool_size == i) {
-	rlog("[%s] Not enough space in any active memdoms. Current number of active memdoms: %d, last memdom %d\n", __func__, pool_size, dalloc->memdom_id);
-	if (is_interp_dom)
-	  new_interp_memdom();
-	else
-	  new_data_obj_memdom(opt_label);
+        rlog("[%s] Not enough space in any active memdoms. Current number of active memdoms: %d, last memdom %d\n", __func__, pool_size, dalloc->memdom_id);
+        if (is_interp_dom)
+          new_interp_memdom();
+        else
+          new_data_obj_memdom(opt_label);
       }
     }
     dalloc = dalloc->next;
@@ -230,7 +230,7 @@ static int free_dom_alloc(void *op, pyr_dom_alloc_t *pool) {
 static void new_interp_memdom() {
   pyr_dom_alloc_t *new_dom = NULL;
   struct pyr_thread *th = NULL;
-  
+
   if (num_interp_memdoms_in_use+1 > MAX_NUM_INTERP_DOMS)
     return;
 
@@ -293,11 +293,11 @@ void *pyr_alloc_critical_runtime_state(size_t size) {
 
   pthread_mutex_lock(&security_ctx_mutex);
   new_block = alloc_memdom_pool(runtime->interp_doms, num_interp_memdoms_in_use,
-				true, NULL, size);
+                                true, NULL, size);
   rlog("[%s] New interp dom buffer %p\n", __func__, new_block);
   pthread_mutex_unlock(&security_ctx_mutex);
   return new_block;
-  
+
 }
 
 /** Wrapper around memdom_free in the interpreter domain.
@@ -335,7 +335,7 @@ int pyr_is_critical_state(void *op) {
     pthread_mutex_lock(&security_ctx_mutex);
     dalloc = get_dom_alloc(op, runtime->interp_doms);
     pthread_mutex_unlock(&security_ctx_mutex);
-    
+
     return (dalloc && dalloc->memdom_id > 0);
 }
 
@@ -345,7 +345,7 @@ void pyr_grant_critical_state_write(void *op) {
     int i = 0;
     pyr_dom_alloc_t *dalloc = NULL;
     int cur_smv = -1;
-    
+
     if (is_build)
       return;
 
@@ -381,8 +381,8 @@ void pyr_grant_critical_state_write(void *op) {
       dalloc = get_dom_alloc(op, runtime->interp_doms);
       rlog("[%s] grant access to obj %p?\n", __func__, op);
       if (!dalloc || dalloc->memdom_id <= 0) {
-	pthread_mutex_unlock(&security_ctx_mutex);
-	return;
+        pthread_mutex_unlock(&security_ctx_mutex);
+        return;
       }
 
       // if the caller has given us an existing secure object to
@@ -445,7 +445,7 @@ void pyr_revoke_critical_state_write(void *op) {
     int i = 0;
     pyr_dom_alloc_t *dalloc = NULL;
     int cur_smv = -1;
-                        
+
     if (is_build)
       return;
 
@@ -482,8 +482,8 @@ void pyr_revoke_critical_state_write(void *op) {
       dalloc = get_dom_alloc(op, runtime->interp_doms);
       rlog("[%s] revoke access from obj %p?\n", __func__, op);
       if (!dalloc || dalloc->memdom_id <= 0) {
-	pthread_mutex_unlock(&security_ctx_mutex);
-	return;
+        pthread_mutex_unlock(&security_ctx_mutex);
+        return;
       }
 
       if (cur_smv == MAIN_THREAD) {
@@ -541,7 +541,7 @@ static void new_data_obj_memdom(char *label) {
   pyr_data_obj_domain_t *obj_dom = find_domain(label, runtime->obj_domains_list);
   if (!obj_dom)
     return;
-  
+
   if (obj_dom->pool_size+1 > MAX_OBJ_DOM_POOL_SIZE)
     return;
 
@@ -556,7 +556,7 @@ static void new_data_obj_memdom(char *label) {
     new_dom->writable_main = true;
   }
   memdom_priv_add(new_dom->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-  
+
   // insert at tail
   obj_dom->pool_tail->next = new_dom;
   obj_dom->pool_tail = new_dom;
@@ -599,7 +599,7 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
         goto out;
 
     new_block = alloc_memdom_pool(domain->memdom_pool, domain->pool_size,
-				  false, domain->label, size);
+                                  false, domain->label, size);
     rlog("[%s] Allocated obj %p in domain %s\n", __func__, new_block, domain->label);
  out:
     pthread_mutex_unlock(&security_ctx_mutex);
@@ -609,7 +609,7 @@ void *pyr_data_object_alloc(char *obj_name, size_t size) {
 static pyr_dom_alloc_t *get_data_obj_domain(void *addr) {
   dom_list_t *dom_item = runtime->obj_domains_list;
   pyr_dom_alloc_t *dalloc = NULL;
-  
+
   pthread_mutex_lock(&security_ctx_mutex);
   while(dom_item) {
     dalloc = get_dom_alloc(addr, dom_item->domain->memdom_pool);
@@ -661,7 +661,7 @@ int pyr_is_isolated_data_obj(void *addr) {
 
     if (!runtime)
         return 0;
-    
+
     return (get_data_obj_domain(addr) != NULL);
 }
 
@@ -670,45 +670,45 @@ int pyr_is_sandboxed(char *sandbox_name) {
 
   if (is_build)
     return 0;
-  
+
   // suspend if the stack tracer thread is running
   pyr_is_inspecting();
-  
+
   // let's skip adding write privs if our runtime
   // doesn't have a domain or our domain is invalid
   if (!runtime) {
     return 0;
   }
- 
+
   pthread_mutex_lock(&security_ctx_mutex);
   sb = find_sandbox(sandbox_name, runtime->func_sandboxes);
   pthread_mutex_unlock(&security_ctx_mutex);
-  
+
   return (sb != NULL);
 }
 
 void pyr_grant_data_obj_write(void *op) {
   pyr_dom_alloc_t * obj_dom = NULL;
-  
+
   if (is_build)
     return;
-  
+
   // suspend if the stack tracer thread is running
   pyr_is_inspecting();
-  
+
   // let's skip adding write privs if our runtime
   // doesn't have a domain or our domain is invalid
   if (!runtime) {
     return;
   }
-  
-  if (!op) 
+
+  if (!op)
     return;
 
   obj_dom = get_data_obj_domain(op);
   if (!obj_dom)
     return;
-  
+
   pthread_mutex_lock(&security_ctx_mutex);
   if (!obj_dom->writable_main) {
     memdom_priv_add(obj_dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
@@ -722,26 +722,26 @@ void pyr_grant_data_obj_write(void *op) {
 
 void pyr_revoke_data_obj_write(void *op) {
   pyr_dom_alloc_t * obj_dom = NULL;
-  
+
   if (is_build)
     return;
-  
+
   // suspend if the stack tracer thread is running
   pyr_is_inspecting();
-  
+
   // let's skip adding write privs if our runtime
   // doesn't have a domain or our domain is invalid
   if (!runtime) {
     return;
   }
-  
-  if (!op) 
+
+  if (!op)
     return;
 
   obj_dom = get_data_obj_domain(op);
   if (!obj_dom)
     return;
-  
+
   pthread_mutex_lock(&security_ctx_mutex);
   if (!obj_dom->writable_main) {
     memdom_priv_del(obj_dom->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
@@ -773,17 +773,17 @@ static pyr_func_sandbox_t *pyr_grant_sandbox_access(char *sandbox_name) {
     while (ro_objs) {
         pyr_data_obj_t *ro_obj = ro_objs->obj;
         pyr_data_obj_domain_t *dom = find_domain(ro_obj->domain_label, runtime->obj_domains_list);
-	if (dom) {
-	  pyr_dom_alloc_t *dalloc = dom->memdom_pool;
-	  while(dalloc) {
-	    if (dalloc->has_space) {
-	      memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_READ);
-	    }
-	    dalloc = dalloc->next;
-	  }
-	  rlog("[%s] Add read privilege to domain %s for sandbox %s\n",
-	       __func__, dom->label, sandbox_name);
-	}
+        if (dom) {
+          pyr_dom_alloc_t *dalloc = dom->memdom_pool;
+          while(dalloc) {
+            if (dalloc->has_space) {
+              memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_READ);
+            }
+            dalloc = dalloc->next;
+          }
+          rlog("[%s] Add read privilege to domain %s for sandbox %s\n",
+               __func__, dom->label, sandbox_name);
+        }
         ro_objs = ro_objs->next;
     }
 
@@ -791,16 +791,16 @@ static pyr_func_sandbox_t *pyr_grant_sandbox_access(char *sandbox_name) {
     if (rw_obj) {
         pyr_data_obj_domain_t *dom = find_domain(rw_obj->domain_label, runtime->obj_domains_list);
         if (dom) {
-	  pyr_dom_alloc_t *dalloc = dom->memdom_pool;
-	  while(dalloc) {
-	    if (dalloc->has_space && !dalloc->writable_main) {
-	      memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
-	      dalloc->writable_main = true;
-	    }
-	    dalloc = dalloc->next;
-	  }
-	  rlog("[%s] Add read/write privilege to domain %s for sandbox %s\n",
-		 __func__, dom->label, sandbox_name);
+          pyr_dom_alloc_t *dalloc = dom->memdom_pool;
+          while(dalloc) {
+            if (dalloc->has_space && !dalloc->writable_main) {
+              memdom_priv_add(dalloc->memdom_id, MAIN_THREAD, MEMDOM_READ | MEMDOM_WRITE);
+              dalloc->writable_main = true;
+            }
+            dalloc = dalloc->next;
+          }
+          rlog("[%s] Add read/write privilege to domain %s for sandbox %s\n",
+                 __func__, dom->label, sandbox_name);
         }
     }
 
@@ -848,17 +848,17 @@ static void pyr_revoke_sandbox_access(char *sandbox_name) {
     while (ro_objs) {
         pyr_data_obj_t *ro_obj = ro_objs->obj;
         pyr_data_obj_domain_t *dom = find_domain(ro_obj->domain_label, runtime->obj_domains_list);
-	if (dom) {
-	  pyr_dom_alloc_t *dalloc = dom->memdom_pool;
-	  while(dalloc) {
-	    if (dalloc->has_space) {
-	      //memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_READ);
-	    }
-	    dalloc = dalloc->next;
-	  }
-	  rlog("[%s] Revoked read privilege to domain %s for sandbox %s\n",
-	       __func__, dom->label, sandbox_name);
-	}
+        if (dom) {
+          pyr_dom_alloc_t *dalloc = dom->memdom_pool;
+          while(dalloc) {
+            if (dalloc->has_space) {
+              //memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_READ);
+            }
+            dalloc = dalloc->next;
+          }
+          rlog("[%s] Revoked read privilege to domain %s for sandbox %s\n",
+               __func__, dom->label, sandbox_name);
+        }
         ro_objs = ro_objs->next;
     }
 
@@ -866,16 +866,16 @@ static void pyr_revoke_sandbox_access(char *sandbox_name) {
     if (rw_obj) {
         pyr_data_obj_domain_t *dom = find_domain(rw_obj->domain_label, runtime->obj_domains_list);
         if (dom) {
-	  pyr_dom_alloc_t *dalloc = dom->memdom_pool;
-	  while(dalloc) {
-	    if (dalloc->writable_main) {
-	      memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
-	      dalloc->writable_main = false;
-	    }
-	    dalloc = dalloc->next;
-	  }
-	  rlog("[%s] Revoked read/write privilege to domain %s for sandbox %s\n",
-		 __func__, dom->label, sandbox_name);
+          pyr_dom_alloc_t *dalloc = dom->memdom_pool;
+          while(dalloc) {
+            if (dalloc->writable_main) {
+              memdom_priv_del(dalloc->memdom_id, MAIN_THREAD, MEMDOM_WRITE);
+              dalloc->writable_main = false;
+            }
+            dalloc = dalloc->next;
+          }
+          rlog("[%s] Revoked read/write privilege to domain %s for sandbox %s\n",
+                 __func__, dom->label, sandbox_name);
         }
     }
 
@@ -902,7 +902,7 @@ void pyr_exit_sandbox() {
 
     if (!cur_sandbox)
       return;
-    
+
     pyr_revoke_sandbox_access(cur_sandbox->func_name);
     cur_sandbox = NULL;
 }
@@ -996,7 +996,7 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
     }
     num_pyr_threads++;
     pthread_mutex_unlock(&security_ctx_mutex);
-    
+
     printf("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
     return ret;
 }
@@ -1031,7 +1031,7 @@ static struct pyr_thread *get_cur_pyr_thread() {
         if (pthread_equal(th->self, cur_thread)) {
             return th;
         }
-	th = th->next;
+        th = th->next;
     }
     return NULL;
 }
