@@ -151,7 +151,7 @@ static int read_netlink_data(struct nl_msg **new_msg) {
     return err;
   }
 
-  printf("[%s] Received new SI message (%lu bytes)\n", __func__, num_read);
+  rlog("[%s] Received new SI message (%lu bytes)\n", __func__, num_read);
   
   /* Validate response message */
   if (!NLMSG_OK((&req.n), num_read)){
@@ -262,9 +262,9 @@ void *pyr_recv_from_kernel(void *args) {
     is_inspecting_stack = false;
     pthread_cond_broadcast(&si_cond_var);
     pthread_mutex_unlock(&security_ctx_mutex);
-    printf("[%s] Listening at port %d\n", __func__, si_port);
+    rlog("[%s] Listening at port %d\n", __func__, si_port);
     
-    /*ready = epoll_wait(epoll_fd, events, 1, 1000);
+    ready = epoll_wait(epoll_fd, events, 1, 1000);
     if (ready == -1) {
       printf("[%s] Polling SI socket failed (error = %d)\n", __func__, errno);
       goto out;
@@ -272,7 +272,7 @@ void *pyr_recv_from_kernel(void *args) {
     else if (ready == 0) {
       printf("[%s] Polling SI socket timed out. Try again\n", __func__);
     }
-    else if (ready == 1) {*/
+    else if (ready == 1) {
       struct nl_msg *new_msg = NULL;
       err = read_netlink_data(&new_msg);
       if (err < 0) {
@@ -283,7 +283,7 @@ void *pyr_recv_from_kernel(void *args) {
 	goto out;
       }
       free_nl_msg(&new_msg);
-      //}
+    }
   }
  out:
   pthread_mutex_lock(&security_ctx_mutex);
@@ -321,7 +321,7 @@ static int init_si_socket() {
     }
 
     nl_fam = get_family_id(nl_socket_get_fd(si_sock), si_port, FAMILY_STR);
-    //nl_socket_set_nonblocking(si_sock);
+    nl_socket_set_nonblocking(si_sock);
     
     err = init_epoll();
     if (err == -1) {
