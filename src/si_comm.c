@@ -267,7 +267,8 @@ void *pyr_recv_from_kernel(void *args) {
     ready = epoll_wait(epoll_fd, events, 1, 1000);
     if (ready == -1) {
       printf("[%s] Polling SI socket failed (error = %d)\n", __func__, errno);
-      goto out;
+      if (errno != EINTR)
+	goto out;
     }
     else if (ready == 0) {
       rlog("[%s] Polling SI socket timed out. Try again\n", __func__);

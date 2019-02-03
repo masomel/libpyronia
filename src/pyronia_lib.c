@@ -371,6 +371,7 @@ void pyr_grant_critical_state_write(void *op) {
                    __func__, cur_smv);
             goto out;
         }
+	rlog("[%s] Granting access to interp dom to smv %d\n", __func__, cur_smv);
     }
     else {
         cur_smv = MAIN_THREAD;
@@ -381,8 +382,7 @@ void pyr_grant_critical_state_write(void *op) {
       dalloc = get_dom_alloc(op, runtime->interp_doms);
       rlog("[%s] grant access to obj %p?\n", __func__, op);
       if (!dalloc || dalloc->memdom_id <= 0) {
-	pthread_mutex_unlock(&security_ctx_mutex);
-	return;
+	goto out;
       }
 
       // if the caller has given us an existing secure object to
@@ -405,8 +405,6 @@ void pyr_grant_critical_state_write(void *op) {
       }
       goto out;
     }
-
-    rlog("[%s] Grants: %d\n", __func__, runtime->nested_grants);
 
     // slight optimization: if we've already granted access
     // let's avoid another downcall to change the memdom privileges
@@ -482,8 +480,7 @@ void pyr_revoke_critical_state_write(void *op) {
       dalloc = get_dom_alloc(op, runtime->interp_doms);
       rlog("[%s] revoke access from obj %p?\n", __func__, op);
       if (!dalloc || dalloc->memdom_id <= 0) {
-	pthread_mutex_unlock(&security_ctx_mutex);
-	return;
+	goto out;
       }
 
       if (cur_smv == MAIN_THREAD) {
