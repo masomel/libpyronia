@@ -1108,6 +1108,7 @@ pyr_cg_node_t *pyr_collect_runtime_callstack() {
       return NULL;
     // if we're inspecting, we don't want sandbox memory mgmt
     // to apply, so save the sandbox status, and proceed
+    pthread_mutex_lock(&security_ctx_mutex);
     if (cur_sandbox && cur_sandbox->in_sandbox) {
       in_sb = true;
       cur_sandbox->in_sandbox = false;
@@ -1119,6 +1120,7 @@ pyr_cg_node_t *pyr_collect_runtime_callstack() {
     if (in_sb)
       cur_sandbox->in_sandbox = true;
     rlog("[%s] Done collecting callstack\n", __func__);
+    pthread_mutex_unlock(&security_ctx_mutex);
     return cg;
 }
 
@@ -1132,13 +1134,16 @@ int pyr_new_cg_node(pyr_cg_node_t **cg_root, const char* lib,
                         enum pyr_data_types data_type,
                         pyr_cg_node_t *child) {
 
-    pyr_cg_node_t *n = memdom_alloc(si_memdom, sizeof(pyr_cg_node_t));
+  int err = -1;
+  pyr_cg_node_t *n = NULL;
 
+    n = memdom_alloc(si_memdom, sizeof(pyr_cg_node_t));
     if (n == NULL) {
         goto fail;
     }
 
-    n->lib = memdom_alloc(si_memdom, strlen(lib)+1);
+    //n->lib = memdom_alloc(si_memdom, strlen(lib)+1);
+    n->lib = malloc(strlen(lib)+1);
     if (!n->lib) {
         goto fail;
     }
@@ -1148,11 +1153,19 @@ int pyr_new_cg_node(pyr_cg_node_t **cg_root, const char* lib,
     n->data_type = data_type;
     n->child = child;
 
-    *cg_root = n;
-    return 0;
+    err = 0;
+    goto out;
  fail:
-    memdom_free(n);
-    return -1;
+    if (n) {
+      if (n->lib)
+	//memdom_free(n->lib);
+	free(n->lib);
+      memdom_free(n);
+    }
+    n = NULL;
+ out:
+    *cg_root = n;
+    return err;
 }
 
 // Recursively free the callgraph nodes
@@ -1167,7 +1180,7 @@ static void free_node(pyr_cg_node_t **node) {
       free_node(&n->child);
     }
 
-    memdom_free(n->lib);
+    free(n->lib);
     memdom_free(n);
     *node = NULL;
 }

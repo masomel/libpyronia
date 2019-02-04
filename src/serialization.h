@@ -23,9 +23,9 @@ int si_memdom;
 extern "C" {
 #endif
 
-    int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack);
     int pyr_parse_lib_policy(const char *policy_fname, char **parsed,
                              char ***parsed_obj_rules, int *num_rules);
+    int finalize_callstack_str(char **cs_str);
 
 #ifdef __cplusplus
 }

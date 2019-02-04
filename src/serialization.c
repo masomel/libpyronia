@@ -15,68 +15,91 @@
 #include "pyronia_lib.h"
 #include "serialization.h"
 
+static char *serialized = NULL;
+static uint32_t ser_len = 1;
+static uint32_t node_count = 0;
+
 // Serialize a callstack "object" to a tokenized string
 // that the LSM can then parse. Do basic input sanitation as well.
 // The function uses strncat(), which appends a string to the given
 // "dest" string, so the serialized callstack is ordered from root to leaf.
 // Caller must memdom_free the string.
-int pyr_serialize_callstack(char **cs_str, pyr_cg_node_t *callstack) {
-    pyr_cg_node_t *cur_node;
-    char *ser = NULL, *out = NULL, *tmp_ser = NULL;
-    uint32_t node_count = 0, ser_len = 1; // for null-byte
+int pyr_serialize_callstack(const char *func_fqn) {
+  //pyr_cg_node_t *cur_node;
+    char *tmp_ser = NULL;
     char *delim = CALLSTACK_STR_DELIM;
     int ret = -1;
 
-    if (!callstack)
-        goto fail;
-
-    cur_node = callstack;
-    while (cur_node) {
+    //while (cur_node) {
         // let's sanity check our lib name first (i.e. it should not
         // contain our delimiter character
-        if (strchr(cur_node->lib, *delim)) {
-            printf("[%s] Oops, library name %s contains unacceptable characetr\n", __func__, cur_node->lib);
-            goto fail;
-        }
-
-        tmp_ser = realloc(ser, ser_len+strlen(cur_node->lib)+1);
-        if (!tmp_ser)
-            goto fail;
-
-        // UGH need to clear the very first allocation,
-        // so we don't accidentally start concatenating to
-        // junk that realloc spits out
-        if (ser_len == 1) {
-          memset(tmp_ser, 0, ser_len+strlen(cur_node->lib)+1);
-        }
-
-        ser = tmp_ser;
-
-        strncat(ser, cur_node->lib, strlen(cur_node->lib));
-        strncat(ser, CALLSTACK_STR_DELIM, 1);
-        ser_len += strlen(cur_node->lib)+1;
-        cur_node = cur_node->child;
-        node_count++;
-
-        rlog("[%s] Serialized node: %s, # nodes %d\n", __func__, ser, node_count);
+    if (strchr(func_fqn, *delim)) {
+      printf("[%s] Oops, library name %s contains unacceptable characetr\n", __func__, func_fqn);
+      goto fail;
     }
+    
+    tmp_ser = memdom_alloc(si_memdom, ser_len+strlen(func_fqn)+1);
+    if (serialized)
+      // because we traverse the call stack bottom up in the runtime,
+      // but we want the kernel to check it top-down, we need to
+      // copy the previous frames into the end of the string
+      memcpy(tmp_ser+strlen(func_fqn)+1, serialized, ser_len);
+    memdom_free(serialized);
+    serialized = tmp_ser;
+    
+    /*
+      tmp_ser = realloc(serialized, ser_len+strlen(func_fqn)+1);
+      if (!tmp_ser)
+      goto fail;
+      
+      // UGH need to clear the very first allocation,
+      // so we don't accidentally start concatenating to
+      // junk that realloc spits out
+      if (ser_len == 1) {
+      memset(tmp_ser, 0, ser_len+strlen(func_fqn)+1);
+      }
+      
+      serialized = tmp_ser;
+    */
+    
+    memcpy(serialized, func_fqn, strlen(func_fqn));
+    memcpy(serialized+strlen(func_fqn), CALLSTACK_STR_DELIM, 1);
+    ser_len += strlen(func_fqn)+1;
+    node_count++;
+    
+    printf("[%s] Serialized node: %s, # nodes %d\n", __func__, serialized, node_count);
+    ret = 0;
+    goto out;
+    
+ fail:
+    if (serialized)
+      memdom_free(serialized);
+    serialized = NULL;
+    ser_len = 1;
+    node_count = 0;
+ out:
+    return ret;
+}
 
-    // now we need to pre-append the len so the kernel knows how many
-    // nodes to expect to de-serialize
-    out = memdom_alloc(si_memdom, strlen(ser)+INT32_STR_SIZE+2);
-    if (!out)
-        goto fail;
-    memset(out, 0, strlen(ser)+INT32_STR_SIZE+2);
-    ret = sprintf(out, "%d,%s", node_count, ser);
-    free(ser);
-    rlog("[%s] Serialized call stack: %s\n", __func__, out);
+int finalize_callstack_str(char **cs_str) {
+  int ret = -1;
+  char *out = NULL;
+  // now we need to pre-append the len so the kernel knows how many
+  // nodes to expect to de-serialize
+  out = memdom_alloc(si_memdom, strlen(serialized)+INT32_STR_SIZE+2);
+  if (!out)
+    goto out;
+  memset(out, 0, strlen(serialized)+INT32_STR_SIZE+2);
+  ret = sprintf(out, "%d,%s", node_count, serialized);
+  rlog("[%s] Serialized call stack: %s\n", __func__, out);
+ out:
+    if (serialized)
+        memdom_free(serialized);
+    serialized = NULL;
+    ser_len = 1;
+    node_count = 0;
     *cs_str = out;
     return ret;
- fail:
-    if (ser)
-        free(ser);
-    *cs_str = NULL;
-    return -1;
 }
 
 static int read_policy_file(const char *policy_fname, char **buf) {

@@ -513,12 +513,10 @@ void *memdom_alloc(int memdom_id, unsigned long sz){
        * if the remaining chunk size if greater then CHUNK_SIZE
        */
       else {
-	char *ptr = (char*)free_list->addr;
-	ptr = ptr + sz;
-	free_list->addr = (void*)ptr;
+	free_list->addr = free_list->addr + sz;;
 	free_list->size = free_list->size - sz;
         new_alloc = alloc_metadata_init(memblock, sz);
-	rlog("[%s] Adjust free list to addr %p, sz %lu\n",
+	("[%s] Adjust free list to addr %p, sz %lu\n",
 	     __func__, free_list->addr, free_list->size);
       }
       allocs_insert_to_head(memdom_id, new_alloc);

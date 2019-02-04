@@ -233,15 +233,17 @@ static int pyr_handle_callstack_request(struct nl_msg *msg, void *arg) {
     
     // Collect and serialize the callstack
     callstack = pyr_collect_runtime_callstack();
-    err = pyr_serialize_callstack(&callstack_str, callstack);
+    err = finalize_callstack_str(&callstack_str);
     if (err > 0) {
         rlog("[%s] Sending serialized callstack %s (%d bytes) to kernel\n", __func__, callstack_str, err);
     }
     
  out:
     err = pyr_to_kernel(SI_COMM_C_STACK_REQ, SI_COMM_A_USR_MSG, callstack_str);
+    /*
     if (callstack)
         pyr_free_callgraph(&callstack);
+    */
     if (callstack_str)
         memdom_free(callstack_str);
 

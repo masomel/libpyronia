@@ -37,6 +37,7 @@ extern "C" {
     void pyr_grant_critical_state_write(void *op);
     void pyr_revoke_critical_state_write(void *op);
     int pyr_free_critical_state(void *op);
+    int pyr_serialize_callstack(const char *func_fqn);
     void *pyr_data_object_alloc(char *name, size_t size);
     void pyr_data_obj_free(void *addr);
     int pyr_is_isolated_data_obj(void *addr);
