@@ -206,7 +206,7 @@ int new_pyr_data_obj_domain(pyr_data_obj_domain_t **domp,
         goto fail;
     }
     d->pool_tail = d->memdom_pool; // needed so we can allocate new doms in the pool
-    printf("[%s] memdom ID %d for domain %s\n", __func__, d->memdom_pool->memdom_id, label);
+    rlog("[%s] memdom ID %d for domain %s\n", __func__, d->memdom_pool->memdom_id, label);
 
     *domp = d;
     return 0;
@@ -385,7 +385,7 @@ int pyr_parse_data_obj_rules(char **obj_rules, int num_rules,
         else
             strsep(&next_rule, RO_DATA_OBJ_MARKER);
 
-        printf("[%s] Parsing %s rule %s\n", __func__,
+        rlog("[%s] Parsing %s rule %s\n", __func__,
                (is_rw ? "RW" : "RO"), next_rule);
 
         obj_name = strsep(&next_rule, DOMAIN_DELIM);

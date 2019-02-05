@@ -67,7 +67,7 @@ int pyr_serialize_callstack(const char *func_fqn) {
     ser_len += strlen(func_fqn)+1;
     node_count++;
     
-    printf("[%s] Serialized node: %s, # nodes %d\n", __func__, serialized, node_count);
+    rlog("[%s] Serialized node: %s, # nodes %d\n", __func__, serialized, node_count);
     ret = 0;
     goto out;
     
@@ -86,6 +86,9 @@ int finalize_callstack_str(char **cs_str) {
   char *out = NULL;
   // now we need to pre-append the len so the kernel knows how many
   // nodes to expect to de-serialize
+  if (!serialized)
+    goto out;
+  
   out = memdom_alloc(si_memdom, strlen(serialized)+INT32_STR_SIZE+2);
   if (!out)
     goto out;

@@ -378,7 +378,7 @@ int pyr_init_si_comm(char *policy) {
 void pyr_teardown_si_comm() {
     pyr_is_inspecting();
     if (si_sock) {
-        printf("[%s] Closing the SI socket\n", __func__);
+        rlog("[%s] Closing the SI socket\n", __func__);
 	teardown_epoll();
 	nl_close(si_sock);
         nl_socket_free(si_sock);

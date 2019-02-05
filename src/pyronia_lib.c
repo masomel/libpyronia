@@ -989,12 +989,12 @@ int pyr_thread_create(pthread_t* tid, const pthread_attr_t *attr,
     if (!ret) {
       new_th->next = runtime->pyr_threads;
       runtime->pyr_threads = new_th;
-      printf("[%s] Added new Pyr thread %lu\n", __func__, new_th->self);
+      rlog("[%s] Added new Pyr thread %lu\n", __func__, new_th->self);
     }
     num_pyr_threads++;
     pthread_mutex_unlock(&security_ctx_mutex);
 
-    printf("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
+    rlog("[%s] Created new Pyronia thread to run in SMV %d\n", __func__, pyr_smv_id);
     return ret;
 }
 
